@@ -37,3 +37,8 @@ if(LAPACK_ENABLE AND LAPACK_FOUND)
   add_subdirectory(lapackband)
   add_subdirectory(lapackdense)
 endif(LAPACK_ENABLE AND LAPACK_FOUND)
+
+if(PSBLAS_FOUND AND MLD2P4_FOUND AND PSBLAS_EXT_FOUND AND MLD2P4_EXT_FOUND)
+     add_subdirectory(psblasfcg)
+endif(PSBLAS_FOUND AND MLD2P4_FOUND AND PSBLAS_EXT_FOUND AND MLD2P4_EXT_FOUND)
+
