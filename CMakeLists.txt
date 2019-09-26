@@ -477,8 +477,16 @@ ENDIF()
 # ---------------------------------------------------------------
 OPTION(Trilinos_ENABLE "Enable Trilinos support" OFF)
 
+# ---------------------------------------------------------------
+# Enable PSBLAS/MLD2P4 support?
+# ---------------------------------------------------------------
+OPTION(PSBLAS_ENABLE "Enable PSBLAS support" OFF)
+OPTION(MLD2P4_ENABLE "Enable MLD2P4 support" OFF)
+OPTION(PSBLAS_EXT_ENABLE "Enable PSBLAS-EXT support" OFF)
+OPTION(MLD2P4_EXT_ENABLE "Enable MLD2P4-EXT support" OFF)
 
-# ===============================================================
+
+# =======================F========================================
 # Options for examples
 # ===============================================================
 
@@ -1089,6 +1097,102 @@ if(Trilinos_ENABLE)
     PRINT_WARNING("Trilinos not functional" "Verify the path to Trilinos and check the Trilinos installation")
   endif()
 endif(Trilinos_ENABLE)
+
+# ---------------------------------------------------------------
+# Find (and test) the all PSBLAS/MLD2P4 environment
+# ---------------------------------------------------------------
+
+IF(PSBLAS_ENABLE)
+  MESSAGE(STATUS "LOADING PSBLAS")
+  SHOW_VARIABLE(PSBLAS_INCLUDE_DIR PATH "PSBLAS include directory" "${PSBLAS_INCLUDE_DIR}")
+  SHOW_VARIABLE(PSBLAS_LIBRARY_DIR PATH "PSBLAS library directory" "${PSBLAS_LIBRARY_DIR}")
+
+  INCLUDE(SundialsPSBLAS)
+  IF(PSBLAS_FOUND)
+    # sundials_config.h symbol
+    SET(SUNDIALS_PSBLAS TRUE)
+    INCLUDE_DIRECTORIES(${PSBLAS_INCLUDE_DIR})
+  ENDIF(PSBLAS_FOUND)
+
+  IF(PSBLAS_LIBRARIES AND NOT PSBLAS_FOUND)
+    PRINT_WARNING("PSBLAS not functional - support will not be provided"
+                  "Double check spelling specified libraries (search is case sensitive)")
+  ENDIF(PSBLAS_LIBRARIES AND NOT PSBLAS_FOUND)
+
+ELSE()
+  HIDE_VARIABLE(PSBLAS_LIBRARY_DIR)
+  HIDE_VARIABLE(PSBLAS_INCLUDE_DIR)
+  SET (PSBLAS_DISABLED TRUE CACHE INTERNAL "GUI - return when first set")
+ENDIF()
+
+IF(PSBLAS_EXT_ENABLE)
+  MESSAGE(STATUS "LOADING PSBLAS-EXT")
+  SHOW_VARIABLE(PSBLAS_EXT_INCLUDE_DIR PATH "PSBLAS include directory" "${PSBLAS_EXT_INCLUDE_DIR}")
+  SHOW_VARIABLE(PSBLAS_EXT_LIBRARY_DIR PATH "PSBLAS library directory" "${PSBLAS_EXT_LIBRARY_DIR}")
+
+  INCLUDE(SundialsPSBLAS_EXT)
+  IF(PSBLAS_EXT_FOUND)
+    SET(SUNDIALS_PSBLAS_EXT TRUE)
+    INCLUDE_DIRECTORIES(${PSBLAS_EXT_INCLUDE_DIR})
+  ENDIF(PSBLAS_EXT_FOUND)
+
+  IF(PSBLAS_EXT_LIBRARIES AND NOT PSBLAS_EXT_FOUND)
+    PRINT_WARNING("PSBLAS-EXT not functional - support will not be provided"
+                  "Double check spelling specified libraries (search is case sensitive)")
+  ENDIF(PSBLAS_EXT_LIBRARIES AND NOT PSBLAS_EXT_FOUND)
+
+ELSE()
+  HIDE_VARIABLE(PSBLAS_EXT_LIBRARY_DIR)
+  HIDE_VARIABLE(PSBLAS_EXT_INCLUDE_DIR)
+  SET (PSBLAS_DISABLED TRUE CACHE INTERNAL "GUI - return when first set")
+ENDIF()
+
+IF(MLD2P4_ENABLE)
+  MESSAGE(STATUS "LOADING MLD2P4")
+  SHOW_VARIABLE(MLD2P4_INCLUDE_DIR PATH "MLD2P4 include directory" "${MLD2P4_INCLUDE_DIR}")
+  SHOW_VARIABLE(MLD2P4_LIBRARY_DIR PATH "MLD2P4 library directory" "${MLD2P4_LIBRARY_DIR}")
+
+  INCLUDE(SundialsMLD2P4)
+  IF(MLD2P4_FOUND)
+    # sundials_config.h symbol
+    SET(SUNDIALS_MLD2P4 TRUE)
+    INCLUDE_DIRECTORIES(${MLD2P4_INCLUDE_DIR})
+  ENDIF(MLD2P4_FOUND)
+
+  IF(MLD2P4_LIBRARIES AND NOT MLD2P4_FOUND)
+    PRINT_WARNING("MLD2P4 not functional - support will not be provided"
+                  "Double check spelling specified libraries (search is case sensitive)")
+  ENDIF(MLD2P4_LIBRARIES AND NOT MLD2P4_FOUND)
+
+ELSE()
+  HIDE_VARIABLE(MLD2P4_LIBRARY_DIR)
+  HIDE_VARIABLE(MLD2P4_INCLUDE_DIR)
+  SET (PSBLAS_DISABLED TRUE CACHE INTERNAL "GUI - return when first set")
+ENDIF()
+
+IF(MLD2P4_EXT_ENABLE)
+  MESSAGE(STATUS "LOADING MLD2P4-EXT")
+  SHOW_VARIABLE(MLD2P4_EXT_INCLUDE_DIR PATH "MLD2P4-EXT include directory" "${MLD2P4_EXT_INCLUDE_DIR}")
+  SHOW_VARIABLE(MLD2P4_EXT_LIBRARY_DIR PATH "MLD2P4-EXT library directory" "${MLD2P4_EXT_LIBRARY_DIR}")
+
+  INCLUDE(SundialsMLD2P4_EXT)
+  IF(MLD2P4_EXT_FOUND)
+    SET(SUNDIALS_MLD2P4_EXT TRUE)
+    INCLUDE_DIRECTORIES(${MLD2P4_EXT_INCLUDE_DIR})
+  ENDIF(MLD2P4_EXT_FOUND)
+
+  IF(MLD2P4_EXT_LIBRARIES AND NOT MLD2P4_EXT_FOUND)
+    PRINT_WARNING("PSBLAS-EXT not functional - support will not be provided"
+                  "Double check spelling specified libraries (search is case sensitive)")
+  ENDIF(MLD2P4_EXT_LIBRARIES AND NOT MLD2P4_EXT_FOUND)
+
+ELSE()
+  HIDE_VARIABLE(MLD2P4_EXT_LIBRARY_DIR)
+  HIDE_VARIABLE(MLD2P4_EXT_INCLUDE_DIR)
+  SET (PSBLAS_DISABLED TRUE CACHE INTERNAL "GUI - return when first set")
+ENDIF()
+
+
 
 
 # ===============================================================
