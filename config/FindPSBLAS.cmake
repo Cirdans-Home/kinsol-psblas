@@ -19,21 +19,21 @@ IF(WIN32)
 endif(WIN32)
 
 ### Find include dir
-find_path(temp_PSBLAS_INCLUDE_DIR psb_base_cbind.h ${PSBLAS_INCLUDE_DIR})
+find_path(temp_PSBLAS_INCLUDE_DIR Make.inc.psblas ${PSBLAS_INCLUDE_DIR})
 if (temp_PSBLAS_INCLUDE_DIR)
     set(PSBLAS_INCLUDE_DIR ${temp_PSBLAS_INCLUDE_DIR})
     MESSAGE(STATUS "Setting PSBLAS include dir to ${PSBLAS_INCLUDE_DIR}")
 endif()
 unset(temp_PSBLAS_INCLUDE_DIR CACHE)
 
-if (PSBLAS_LIBRARY)
-    # We have (or were given) PSBLAS_LIBRARY - get path to use for any related libs
-    get_filename_component(PSBLAS_LIBRARY_DIR ${PSBLAS_LIBRARY} PATH)
-    
-    # force CACHE update to show user DIR that will be used
-    set(PSBLAS_LIBRARY_DIR ${PSBLAS_LIBRARY_DIR} CACHE PATH "" FORCE)
-    MESSAGE(STATUS "Setting PSBLAS library dir to ${PSBLAS_LIBRARY_DIR}")
-else ()
+#if (PSBLAS_LIBRARY)
+#    # We have (or were given) PSBLAS_LIBRARY - get path to use for any related libs
+#    get_filename_component(PSBLAS_LIBRARY_DIR ${PSBLAS_LIBRARY} PATH)
+#    
+#    # force CACHE update to show user DIR that will be used
+#    set(PSBLAS_LIBRARY_DIR ${PSBLAS_LIBRARY_DIR} CACHE PATH "" FORCE)
+#    MESSAGE(STATUS "Setting PSBLAS library dir to ${PSBLAS_LIBRARY_DIR}")
+# else ()
     # find library with user provided directory path
     set(PSBLAS_LIBRARY_NAMES libpsb_base.a libpsb_prec.a libpsb_cbind.a libpsb_krylov.a libpsb_util.a)
     find_library(PSBLAS_LIBRARY 
@@ -42,7 +42,7 @@ else ()
       )
     MESSAGE(STATUS "Setting PSBLAS library dir to ${PSBLAS_LIBRARY_DIR}")
     MESSAGE(STATUS "Library names are : ${PSBLAS_LIBRARY_NAMES}")
-endif ()
+#endif ()
 mark_as_advanced(PSBLAS_LIBRARY)
 
 set(PSBLAS_LIBRARIES ${PSBLAS_LIBRARY})

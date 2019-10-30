@@ -19,7 +19,7 @@ IF(WIN32)
 endif(WIN32)
 
 ### Find include dir
-find_path(temp_MLD2P4_EXT_INCLUDE_DIR psb_base_cbind.h ${MLD2P4_EXT_INCLUDE_DIR})
+find_path(temp_MLD2P4_EXT_INCLUDE_DIR Make.inc.mld-ext ${MLD2P4_EXT_INCLUDE_DIR})
 if (temp_MLD2P4_EXT_INCLUDE_DIR)
     set(MLD2P4_EXT_INCLUDE_DIR ${temp_MLD2P4_EXT_INCLUDE_DIR})
     MESSAGE(STATUS "Setting MLD2P4-EXT include dir to ${MLD2P4_EXT_INCLUDE_DIR}")
@@ -35,7 +35,7 @@ if (MLD2P4_EXT_LIBRARY)
     MESSAGE(STATUS "Setting MLD2P4-EXT library dir to ${MLD2P4_EXT_LIBRARY_DIR}")
 else ()
     # find library with user provided directory path
-    set(MLD2P4_EXT_LIBRARY_NAMES libmld_parmatch.a)
+    set(MLD2P4_EXT_LIBRARY_NAMES libmld_parmatch.a libmld_bcm.a)
     find_library(MLD2P4_LIBRARY 
       NAMES ${MLD2P4_EXT_LIBRARY_NAMES}
       PATHS ${MLD2P4_EXT_LIBRARY_DIR} NO_DEFAULT_PATH
