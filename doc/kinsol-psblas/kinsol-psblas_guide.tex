@@ -1,0 +1,152 @@
+\documentclass[twoside,a4paper]{refart}
+
+\usepackage[utf8]{inputenc}
+\usepackage{ae}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{PSBLAS-KINSOL interface}
+\author{Istituto per le Applicazioni del Calcolo ``M. Picone'',\\
+	Consiglio Nazionale delle Ricerche \\
+	Pasqua D'Ambra \\
+	Fabio Durastante \\
+	Salvatore Filippone \\
+	PSBLAS 3.6.1 --- Interface Version 1}
+\date{\today}
+\emergencystretch1em 
+
+\setcounter{tocdepth}{2}
+\settextfraction{0.7}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\usepackage{listings}
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mPurple},
+	basicstyle=\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+%	numbers=left,                    
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+	language=C,
+	morekeywords={N_Vector,sunindextype,psb_i_t,psb_c_descriptor,psb_c_dvector,booleantype}
+}
+
+\usepackage[backend=biber]{biblatex}
+\bibliography{bibliography}
+
+\begin{document}
+	\maketitle
+	
+	\tableofcontents
+	\newpage
+	
+	\section{The NVECTOR\_PSBLAS implementation}
+	The NVECTOR\_PSBLAS implementation of the SUNDIALS NVECTOR module provides an interface to the PSBLAS code for handling distributed dense vectors. Information on the PSBLAS data structures, and functions that are mentioned along the text can be found in~\cite{psblasguide}.
+	
+	It defines the \emph{content} field of \texttt{N\_Vector} to be a structure containing the PSBLAS descriptor for the data distribution, a PSBLAS vector of double, and the PSBLAS communicator (context).
+	
+\begin{lstlisting}[style=CStyle]
+struct _N_VectorContent_PSBLAS {
+	booleantype own_data;  /*ownership of data*/
+	psb_c_descriptor *cdh; /*descriptor for data distribution*/
+	psb_c_dvector *pvec;   /*PSBLAS vector*/
+	int ictxt;             /*PSBLAS communicator*/
+};
+\end{lstlisting}
+	
+	\attention All the vectors that have to interact needs to be instantiated on the same parallel context \lstinline[style=CStyle]|ictxt|, and on the same data distribution \lstinline[style=CStyle]|cdh|.
+	
+	
+	The header file to include when using this module is \texttt{nvector\_psblas.h}. The installed module library to link to is \texttt{sundials\_nvecpsblas.lib} where \texttt{.lib} is typically \texttt{.so} for shared libraries and \texttt{.a} for static libraries.
+	
+	\subsection{NVECTOR\_PSBLAS accessor macros}
+	
+	The following macros are provided to access the content of a NVECTOR\_PSBLAS vector. The suffix \texttt{\_P} in the names denotes the fact that the data are in distributed memory.
+
+\begin{lstlisting}[style=CStyle]
+#define NV_CONTENT_P(v)   ((N_VectorContent_PSBLAS)(v->content))
+#define NV_DESCRIPTOR_P(v)(NV_CONTENT_P(v)->cdh)
+#define NV_OWN_DATA_P(v)  (NV_CONTENT_P(v)->own_data)
+#define NV_PVEC_P(v)      (NV_CONTENT_P(v)->pvec)
+#define NV_ICTXT_P(v)     (NV_CONTENT_P(v)->ictxt)
+\end{lstlisting}
+
+\marginlabel{\lstinline[style=CStyle]|NV_CONTENT_P(v)|} this macro gives access to the contents of the PSBLAS vector \texttt{N\_Vector}.
+
+\marginlabel{\lstinline[style=CStyle]|NV_DESCRIPTOR_P(v),NV_OWN_DATA_P(v),NV_PVEC_P(v)|} these macros give instead individual access to the parts of the content of a PSBLAS parallel \texttt{N\_Vector}.  
+
+\marginlabel{\lstinline[style=CStyle]|NV_ICTXT_P(v)|} this macro provides the PSBLAS context used by the NVECTOR\_PSBLAS vectors.
+
+\subsection{NVECTOR\_PSBLAS functions}
+
+The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the vectors operations listed in Tables~6.2, 6.3, and 6.4 of the original KINSOL library~\cite{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed in Tables~6.2, 6.3, and 6.4 by appending the suffix \texttt{\_PSBLAS}. The NVECTOR\_PSBLAS implementation provides the following additional user--callable routines.
+
+\begin{description}
+	\item[\fbox{\texttt{N\_VNew\_PSBLAS}}] This function creates and allocates memory for a parallel vector
+	on the PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh|
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh);|
+	
+	\item[\fbox{\texttt{N\_VNewEmpty\_PSBLAS}}] This function creates a new PSBLAS vector with empty data array.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh);|
+	
+	\item[\fbox{\texttt{N\_VMake\_PSBLAS}}] Function to create a PSBLAS \texttt{N\_Vector} with user data component. This function is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dgeins|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh,psb_i_t m, psb_i_t *irow,double *val);|
+	
+	The PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh| are the one defined for the whole programs, the integer \lstinline[style=CStyle]{m} is the number of rows in \lstinline[style=CStyle]{val[]} to be inserted, the array of integers \lstinline[style=CStyle]{irow} is the indices of the rows to be inserted. Specifically, row \lstinline[style=CStyle]|i| of \lstinline[style=CStyle]|val| will be inserted into the local row corresponding to the global index row index \lstinline[style=CStyle]|row[i]|.
+	
+	\attention This routine does not assemble the final vector. After the insertion of all the elements has been completed then the vector should be assembled by means of the \texttt{N\_VAss\_PSBLAS} routine.
+	
+	\item[\fbox{\texttt{N\_VAsb\_PSBLAS}}] This routine assemble the NVector after that all the elements have been inserted into it, i.e., after that all the calls to the \texttt{N\_VMake\_PSBLAS} routine have been completed. This is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dgeasb|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VAsb_PSBLAS(N_Vector v)|
+	
+	\item[\fbox{\texttt{N\_VCloneVectorArray\_PSBLAS}}] This function creates an array of new parallel vectors (by cloning) an array of \lstinline[style=CStyle]|count| parallel vectors \lstinline[style=CStyle]|v|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector *N_VCloneVectorArray_PSBLAS(int count, N_Vector w)|
+	
+	\item[\fbox{\texttt{N\_VCloneVectorArrayEmpty\_PSBLAS}}] This function creates an array of \lstinline[style=CStyle]|count| new parallel vectors with empty data array on the same communicator and context of the vector \lstinline[style=CStyle]|w|. 
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector *N_VCloneVectorArrayEmpty_PSBLAS(int count, N_Vector w)|
+	
+	\item[\fbox{\texttt{N\_VDestroyVectorArray\_PSBLAS}}] This function to frees an array of \lstinline[style=CStyle]|count| \texttt{N\_Vector}s created with \texttt{N\_VCloneVectorArray\_PSBLAS}
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VDestroyVectorArray_PSBLAS(N_Vector *vs, int count)|
+	
+	\item[\fbox{\texttt{N\_VGetLength\_PSBLAS}}] This function returns the \emph{global} vector length, this is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_cd_get_global_rows|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|sunindextype N_VGetLength_PSBLAS(N_Vector v)|
+	
+	\item[\fbox{\texttt{N\_VGetLocalLength\_PSBLAS}}] This function returns the \emph{local} vector length, this is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_cd_get_local_rows|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|sunindextype N_VGetLocalLength_PSBLAS(N_Vector v)|
+	
+	\item[\fbox{\texttt{N\_VPrint\_PSBLAS}}] This function prints the local data in a parallel vector to \lstinline[style=CStyle]|stdout|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VPrint_PSBLAS(N_Vector x)|
+	
+	\item[\fbox{\texttt{N\_VPrintFile\_PSBLAS}}] This function prints the local data in a parallel vector to \lstinline[style=CStyle]|outfile|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VPrintFile_PSBLAS(N_Vector x, FILE* outfile)|
+	
+\end{description}
+
+
+\printbibliography
+
+\end{document}

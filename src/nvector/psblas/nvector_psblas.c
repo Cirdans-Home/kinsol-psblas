@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * SUNDIALS Copyright End
  * -----------------------------------------------------------------
- * This is the implementation file for a parallel MPI implementation
+ * This is the implementation file for a parallel PSBLAS implementation
  * of the NVECTOR package.
  * -----------------------------------------------------------------*/
 
@@ -131,7 +131,7 @@ N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh)
 {
   /*
   This function creates and allocates memory for a parallel vector
-  on the PSBLAS context ictxt with the comunicator cdh
+  on the PSBLAS context ictxt with the communicator cdh
   */
   N_Vector v;
   psb_c_dvector *pvec;
@@ -142,8 +142,8 @@ N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh)
 
   /* Define new PSBLAS Vector */
   pvec = psb_c_new_dvector();
-  /* Allocate mem space for the vector on the comunicator cdh */ 
-  psb_c_dgeall(pvec,cdh);  
+  /* Allocate mem space for the vector on the comunicator cdh */
+  psb_c_dgeall(pvec,cdh);
 
   /* Attach data */
   NV_OWN_DATA_P(v) = SUNTRUE;
@@ -154,29 +154,32 @@ N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh)
 
 /* ----------------------------------------------------------------
  * Function to create a PSBLAS N_Vector with user data component:
- * This function does not allocate memory for v_data itsefl
+ * This function does not allocate memory for pvec itsefl
  */
 
-N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh,
-                          psb_c_dvector *v_data)
+N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh, psb_i_t m, psb_i_t *irow,
+                            double *val)
 {
   N_Vector v;
-  psb_i_t    local_length; 
+  psb_i_t    local_length;
 
   v = NULL;
   v = N_VNewEmpty_PSBLAS(ictxt, cdh);
   if (v == NULL) return(NULL);
 
-  /* Get local length of the vector */ 
-  local_length = psb_c_cd_get_local_rows(cdh);
-
-  if (local_length > 0) {
-    /* Attach data */
-    NV_OWN_DATA_P(v) = SUNFALSE;
-    NV_PVEC_P(v)     = v_data;
-  }
+  psb_c_dgeins(m,irow,val,NV_PVEC_P(v),cdh);
 
   return(v);
+}
+
+/* ----------------------------------------------------------------
+ * Function to assemble a PSBLAS N_Vector after the insertion of the
+ * data is completed.
+ */
+
+void N_VAsb_PSBLAS(N_Vector v)
+{
+    psb_c_dgeasb(NV_PVEC_P(v),NV_DESCRIPTOR_P(v));
 }
 
 /* ----------------------------------------------------------------
@@ -423,7 +426,7 @@ void N_VDestroy_PSBLAS(N_Vector v)
 void N_VSpace_PSBLAS(N_Vector v, sunindextype *lrw, sunindextype *liw)
 {
   int ictxt, npes, iam;
- 
+
   ictxt = NV_ICTXT_P(v);
   psb_c_info(ictxt,&iam,&npes);
 
@@ -449,7 +452,61 @@ void N_VLinearSum_PSBLAS(realtype a, N_Vector x, realtype b, N_Vector y, N_Vecto
 {
 
   z = N_VClone_PSBLAS(y);
-  psb_c_dgeaxpby(a, NV_PVEC_P(x), b, NV_PVEC_P(z), NV_DESCRIPTOR_P(x));  
+  psb_c_dgeaxpby(a, NV_PVEC_P(x), b, NV_PVEC_P(z), NV_DESCRIPTOR_P(x));
 
   return;
+}
+
+void N_VConst_PSBLAS(realtype c, N_Vector z)
+{
+  int glob_row, ng, irow[1];
+  double zt[1];
+  zt[0]=c;
+  ng = N_VGetLength_PSBLAS(z);
+  for (glob_row=0; glob_row < ng; glob_row++) {
+    irow[0]=glob_row;
+    psb_c_dgeins(1,irow,zt,NV_PVEC_P(z) ,NV_DESCRIPTOR_P(z));
+  }
+
+  return;
+}
+
+void N_VProd_PSBLAS(N_Vector x, N_Vector y, N_Vector z){
+  //TODO
+  return;
+}
+
+void N_VDiv_PSBLAS(N_Vector x, N_Vector y, N_Vector z){
+  //TODO
+  return;
+}
+
+void N_VScale_PSBLAS(realtype c, N_Vector x, N_Vector z){
+  psb_c_dgeaxpby(c,NV_PVEC_P(x),0,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  return;
+}
+
+void N_VAbs_PSBLAS(N_Vector x, N_Vector z){
+  //TODO
+  return;
+}
+
+void N_VInv_PSBLAS(N_Vector x, N_Vector z){
+  //TODO
+  return;
+}
+
+void N_VAddConst_PSBLAS(N_Vector x, realtype b, N_Vector z){
+  N_VConst_PSBLAS(b, z);
+  psb_c_dgeaxpby(1,NV_PVEC_P(x),1,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+
+  return;
+}
+
+realtype N_VDotProd_PSBLAS(N_Vector x, N_Vector y){
+  return(psb_c_gedot(NV_PVEC_P(x),NV_PVEC_P(y),NV_DESCRIPTOR_P(x)));
+}
+
+realtype N_VMaxNorm_PSBLAS(N_Vector x){
+  return(psb_c_dgeamax(NV_PVEC_P(x),NV_DESCRIPTOR_P(x)));
 }

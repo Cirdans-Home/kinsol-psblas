@@ -1,6 +1,5 @@
-/* ----------------------------------------------------------------- 
- * Programmer(s): Scott D. Cohen, Alan C. Hindmarsh, Radu Serban,
- *                and Aaron Collier @ LLNL
+/* -----------------------------------------------------------------
+ * Programmer(s): Fabio Durastante @ IAC-CNR
  * -----------------------------------------------------------------
  * SUNDIALS Copyright Start
  * Copyright (c) 2002-2019, Lawrence Livermore National Security
@@ -12,7 +11,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * SUNDIALS Copyright End
  * -----------------------------------------------------------------
- * This is the main header file for the MPI-enabled implementation
+ * This is the main header file for the PSBLAS-enabled implementation
  * of the NVECTOR module.
  *
  * Notes:
@@ -21,8 +20,8 @@
  *     found in the header file sundials_nvector.h.
  *
  *   - The definition of the type realtype can be found in the
- *     header file sundials_types.h, and it may be changed (at the 
- *     configuration stage) according to the user's needs. 
+ *     header file sundials_types.h, and it may be changed (at the
+ *     configuration stage) according to the user's needs.
  *     The sundials_types.h file also contains the definition
  *     for the type booleantype.
  *
@@ -50,13 +49,13 @@ extern "C" {
 
 /*
  * -----------------------------------------------------------------
- * PSBLAS implementation of N_Vector               
+ * PSBLAS implementation of N_Vector
  * -----------------------------------------------------------------
  */
 
 struct _N_VectorContent_PSBLAS {
   booleantype own_data;        /* ownership of data                */
-  psb_c_descriptor *cdh;       /* descriptor for data distribution */	
+  psb_c_descriptor *cdh;       /* descriptor for data distribution */
   psb_c_dvector *pvec;	       /* PSBLAS vector                    */
   int ictxt;                   /* PSBLAS communicator              */
 };
@@ -90,8 +89,10 @@ SUNDIALS_EXPORT N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh);
 
 SUNDIALS_EXPORT N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh);
 
-SUNDIALS_EXPORT N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh,
-                          psb_c_dvector *v_data);
+SUNDIALS_EXPORT N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh, psb_i_t m, psb_i_t *irow,
+                            double *val);
+
+SUNDIALS_EXPORT void N_VAsb_PSBLAS(N_Vector v);
 
 SUNDIALS_EXPORT N_Vector *N_VCloneVectorArray_PSBLAS(int count, N_Vector w);
 
@@ -146,7 +147,7 @@ SUNDIALS_EXPORT int N_VDotProdMulti_PSBLAS(int nvec, N_Vector x,
                                              N_Vector *Y, realtype* dotprods);
 
 /* vector array operations */
-SUNDIALS_EXPORT int N_VLinearSumVectorArray_PSBLAS(int nvec, 
+SUNDIALS_EXPORT int N_VLinearSumVectorArray_PSBLAS(int nvec,
                                                      realtype a, N_Vector* X,
                                                      realtype b, N_Vector* Y,
                                                      N_Vector* Z);
