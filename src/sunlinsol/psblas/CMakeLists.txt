@@ -43,13 +43,14 @@ INCLUDE_DIRECTORIES(${MLD2P4_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${PSBLAS_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${PSBLAS_EXT_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${MLD2P4_EXT_INCLUDE_DIR})
-INCLUDE_DIRECTORIES(/usr/mpi/gcc/openmpi-1.10.4/include/) # TODO it should find mpi.h directly, but doesn't work
 
 # Define C preprocessor flag -DBUILD_SUNDIALS_LIBRARY
 ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY)
-
-# Define C preprocessor flags for PSBLAS
-ADD_DEFINITIONS(-DIPK4 -DLPK8 -DPtr64Bits -DLowerUnderscore)
+ADD_DEFINITIONS(-DIPK4) 
+ADD_DEFINITIONS(-DLPK8)
+ADD_DEFINITIONS(-DLowerUnderscore)
+ADD_DEFINITIONS(-DPtr64Bits)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DIPK4 -DLPK8 -DLowerUnderscore -DPtr64Bits")
 
 # Rules for building and installing the static library:
 #  - Add the build target for the SUNLINSOLPCG library
