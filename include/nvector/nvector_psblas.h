@@ -90,7 +90,7 @@ SUNDIALS_EXPORT N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh);
 SUNDIALS_EXPORT N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh);
 
 SUNDIALS_EXPORT N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh,
-  psb_i_t m, psb_i_t *irow,double *val);
+  psb_i_t m, psb_l_t *irow,double *val);
 
 SUNDIALS_EXPORT void N_VAsb_PSBLAS(N_Vector v);
 

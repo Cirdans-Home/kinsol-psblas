@@ -22,6 +22,7 @@
 #include <sundials/sundials_math.h>
 #include <sundials/sundials_mpi.h>
 
+#include "psb_c_base.h"
 #include "psb_base_cbind.h"
 
 /*
@@ -157,7 +158,7 @@ N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh)
  * This function does not allocate memory for pvec itsefl
  */
 
-N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh, psb_i_t m, psb_i_t *irow,
+N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh, psb_i_t m, psb_l_t *irow,
                             double *val)
 {
   N_Vector v;
@@ -448,9 +449,12 @@ void N_VSetArrayPointer_PSBLAS(psb_c_dvector *v_data, N_Vector v)
   return;
 }
 
+/* standard vector operations */
+
 void N_VLinearSum_PSBLAS(realtype a, N_Vector x, realtype b, N_Vector y, N_Vector z)
 {
-
+/*Performs the operation z = ax + by, where a and b are realtype scalars and
+x and y are of type N_Vector: z_i = a x_i + b y_i, i=0,...,n-1*/
   z = N_VClone_PSBLAS(y);
   psb_c_dgeaxpby(a, NV_PVEC_P(x), b, NV_PVEC_P(z), NV_DESCRIPTOR_P(x));
 
@@ -459,7 +463,9 @@ void N_VLinearSum_PSBLAS(realtype a, N_Vector x, realtype b, N_Vector y, N_Vecto
 
 void N_VConst_PSBLAS(realtype c, N_Vector z)
 {
-  int glob_row, ng, irow[1];
+/*Sets all components of the N_Vector z to realtype c: z_i = c, i=0,...,n-1   */
+  psb_i_t glob_row, ng;
+  psb_l_t irow[1];
   double zt[1];
   zt[0]=c;
   ng = N_VGetLength_PSBLAS(z);
@@ -472,31 +478,47 @@ void N_VConst_PSBLAS(realtype c, N_Vector z)
 }
 
 void N_VProd_PSBLAS(N_Vector x, N_Vector y, N_Vector z){
-  //TODO
+/*Sets the N_Vector z to be the component-wise product of N_Vector inputs x and
+y: z_i = x_i y_i, i=0,...,n-1 */
+  z = N_VClone_PSBLAS(y);
+  psb_c_dgemlt(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
 void N_VDiv_PSBLAS(N_Vector x, N_Vector y, N_Vector z){
-  //TODO
+/*Sets the N_Vector z to be the component-wise ratio of the N_vector inputs x
+and y: z_i = x_i/y_i, i=0,...,n-1. The y_i are NOT tested for 0 values. It should
+ONLY be called with an y that is guaranted to have all nonzero components*/
+  z = N_VClone_PSBLAS(y);
+  psb_c_dgeabs(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
 void N_VScale_PSBLAS(realtype c, N_Vector x, N_Vector z){
+/* Scales the N_Vector x by the realtype scalar c and returns the results in z.
+*/
   psb_c_dgeaxpby(c,NV_PVEC_P(x),0,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
 void N_VAbs_PSBLAS(N_Vector x, N_Vector z){
-  //TODO
+/*Sets the component of the N_Vector z to be the absolute values of the compoents
+of the N_Vector x: y_i = |x_i|, i=0,...,n-1*/
+  psb_c_dgeabs(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
 void N_VInv_PSBLAS(N_Vector x, N_Vector z){
-  //TODO
+/*Sets the N_Vector z to be the component-wise inverse of the N_vector inputs x
+and y: z_i = 1/y_i, i=0,...,n-1. The y_i are NOT tested for 0 values. It should
+ONLY be called with an y that is guaranted to have all nonzero components*/
+  psb_c_dgeinv(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
 void N_VAddConst_PSBLAS(N_Vector x, realtype b, N_Vector z){
+/*Adds the realtype scalar b to all components of x and returns the result in
+the N_Vector z: z_i = x_i + b_i*/
   N_VConst_PSBLAS(b, z);
   psb_c_dgeaxpby(1,NV_PVEC_P(x),1,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
 
@@ -504,9 +526,48 @@ void N_VAddConst_PSBLAS(N_Vector x, realtype b, N_Vector z){
 }
 
 realtype N_VDotProd_PSBLAS(N_Vector x, N_Vector y){
-  return(psb_c_gedot(NV_PVEC_P(x),NV_PVEC_P(y),NV_DESCRIPTOR_P(x)));
+/* Returns the value of the ordinary dot product of x and y                   */
+  return(psb_c_dgedot(NV_PVEC_P(x),NV_PVEC_P(y),NV_DESCRIPTOR_P(x)));
 }
 
 realtype N_VMaxNorm_PSBLAS(N_Vector x){
+/* Returns the maximum norm of the N_Vector x*/
   return(psb_c_dgeamax(NV_PVEC_P(x),NV_DESCRIPTOR_P(x)));
+}
+
+realtype N_VWrmsNorm_PSBLAS(N_Vector x, N_Vector w){
+  return(psb_c_dgenrm2_weight(NV_PVEC_P(x),NV_PVEC_P(w),NV_DESCRIPTOR_P(x)));
+}
+
+realtype N_VWrmsNormMask_PSBLAS(N_Vector x, N_Vector w, N_Vector id){
+  return(psb_c_dgenrm2_weightmask(NV_PVEC_P(x),NV_PVEC_P(w),NV_PVEC_P(id),NV_DESCRIPTOR_P(x)));
+}
+
+realtype N_VMin_PSBLAS(N_Vector x){
+  return(psb_c_dgemin(NV_PVEC_P(x),NV_DESCRIPTOR_P(x)));
+}
+
+realtype N_VWL2Norm_PSBLAS(N_Vector x, N_Vector w){
+  return(psb_c_dgenrm2_weight(NV_PVEC_P(x),NV_PVEC_P(w),NV_DESCRIPTOR_P(x)));
+}
+
+void N_VCompare_PSBLAS(realtype c, N_Vector x, N_Vector z){
+   psb_c_dgecmp(NV_PVEC_P(x),c,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+}
+
+booleantype N_VInvTest_PSBLAS(N_Vector x, N_Vector z){
+  bool ret;
+  psb_i_t info;
+
+  info = psb_c_dgeinv_check(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  ret = info;
+
+  return(ret);
+}
+
+booleantype N_VConstrMask_PSBLAS(N_Vector c, N_Vector x, N_Vector m){
+  bool t;
+  psb_c_dmask(NV_PVEC_P(c),NV_PVEC_P(x),NV_PVEC_P(m), t, NV_DESCRIPTOR_P(x));
+
+  return(t);
 }
