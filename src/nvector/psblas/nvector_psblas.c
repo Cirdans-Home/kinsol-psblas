@@ -488,8 +488,7 @@ void N_VDiv_PSBLAS(N_Vector x, N_Vector y, N_Vector z){
 /*Sets the N_Vector z to be the component-wise ratio of the N_vector inputs x
 and y: z_i = x_i/y_i, i=0,...,n-1. The y_i are NOT tested for 0 values. It should
 ONLY be called with an y that is guaranted to have all nonzero components*/
-  z = N_VClone_PSBLAS(y);
-  psb_c_dgeabs(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  psb_c_dgediv2(NV_PVEC_P(x),NV_PVEC_P(y),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
@@ -552,6 +551,8 @@ realtype N_VWL2Norm_PSBLAS(N_Vector x, N_Vector w){
 
 void N_VCompare_PSBLAS(realtype c, N_Vector x, N_Vector z){
    psb_c_dgecmp(NV_PVEC_P(x),c,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+
+   return;
 }
 
 booleantype N_VInvTest_PSBLAS(N_Vector x, N_Vector z){
