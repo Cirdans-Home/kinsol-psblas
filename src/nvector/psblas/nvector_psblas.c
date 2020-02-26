@@ -495,7 +495,7 @@ ONLY be called with an y that is guaranted to have all nonzero components*/
 void N_VScale_PSBLAS(realtype c, N_Vector x, N_Vector z){
 /* Scales the N_Vector x by the realtype scalar c and returns the results in z.
 */
-  psb_c_dgeaxpby(c,NV_PVEC_P(x),0,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  psb_c_dgescal(NV_PVEC_P(x),c,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
@@ -517,9 +517,7 @@ ONLY be called with an y that is guaranted to have all nonzero components*/
 void N_VAddConst_PSBLAS(N_Vector x, realtype b, N_Vector z){
 /*Adds the realtype scalar b to all components of x and returns the result in
 the N_Vector z: z_i = x_i + b_i*/
-  N_VConst_PSBLAS(b, z);
-  psb_c_dgeaxpby(1,NV_PVEC_P(x),1,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
-
+  psb_c_dgeaddconst(NV_PVEC_P(x),b,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));  
   return;
 }
 
