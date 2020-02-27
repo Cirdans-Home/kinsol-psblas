@@ -517,7 +517,7 @@ ONLY be called with an y that is guaranted to have all nonzero components*/
 void N_VAddConst_PSBLAS(N_Vector x, realtype b, N_Vector z){
 /*Adds the realtype scalar b to all components of x and returns the result in
 the N_Vector z: z_i = x_i + b_i*/
-  psb_c_dgeaddconst(NV_PVEC_P(x),b,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));  
+  psb_c_dgeaddconst(NV_PVEC_P(x),b,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
@@ -568,4 +568,8 @@ booleantype N_VConstrMask_PSBLAS(N_Vector c, N_Vector x, N_Vector m){
   psb_c_dmask(NV_PVEC_P(c),NV_PVEC_P(x),NV_PVEC_P(m), t, NV_DESCRIPTOR_P(x));
 
   return(t);
+}
+
+realtype N_VMinQuotient_PSBLAS(N_Vector num, N_Vector denom){
+  return(psb_c_dminquotient(NV_PVEC_P(num),NV_PVEC_P(denom),NV_DESCRIPTOR_P(num)));
 }
