@@ -548,7 +548,7 @@ realtype N_VWL2Norm_PSBLAS(N_Vector x, N_Vector w){
 }
 
 realtype N_VL1Norm_PSBLAS(N_Vector x){
-  return(1.0);
+  return(psb_c_dspnrmi(NV_PVEC_P(x),NV_DESCRIPTOR_P(x)));
 }
 
 void N_VCompare_PSBLAS(realtype c, N_Vector x, N_Vector z){
