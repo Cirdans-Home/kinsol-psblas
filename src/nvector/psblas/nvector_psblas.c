@@ -547,6 +547,10 @@ realtype N_VWL2Norm_PSBLAS(N_Vector x, N_Vector w){
   return(psb_c_dgenrm2_weight(NV_PVEC_P(x),NV_PVEC_P(w),NV_DESCRIPTOR_P(x)));
 }
 
+realtype N_VL1Norm_PSBLAS(N_Vector x){
+  return(1.0);
+}
+
 void N_VCompare_PSBLAS(realtype c, N_Vector x, N_Vector z){
    psb_c_dgecmp(NV_PVEC_P(x),c,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
 

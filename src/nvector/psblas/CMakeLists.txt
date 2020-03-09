@@ -51,7 +51,7 @@ ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
 
 # PSBLAS LINK DIRECTORIES
 LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
-LINK_LIBRARIES(-lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl)
+LINK_LIBRARIES(-lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl -lpthread -llapack -lf77blas -lcblas -latlas -lmetis)
 
 # Rules for building and installing the static library:
 #  - Add the build target for the nvecpsblas library
