@@ -42,7 +42,16 @@ SET(nvecpsblas_HEADERS
 INCLUDE_DIRECTORIES(.)
 
 # Define C preprocessor flag -DBUILD_SUNDIALS_LIBRARY
-ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY)
+ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
+  -fPIC -DHAVE_AMD
+  -DHAVE_METIS -DHAVE_LAPACK
+  -DHAVE_FINAL -DHAVE_ISO_FORTRAN_ENV
+  -DHAVE_FLUSH_STMT -DHAVE_VOLATILE
+  -DLPK8 -DIPK4 -DMPI_MOD -DPtr64Bits -DLowerUnderscore )
+
+# PSBLAS LINK DIRECTORIES
+LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
+LINK_LIBRARIES(-lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl)
 
 # Rules for building and installing the static library:
 #  - Add the build target for the nvecpsblas library

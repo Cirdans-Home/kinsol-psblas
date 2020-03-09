@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <mpi.h>
 #include "psb_base_cbind.h"
+#include "psb_c_base.h"
 #include <sundials/sundials_nvector.h>
 #include <sundials/sundials_mpi_types.h>
 
