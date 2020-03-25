@@ -93,18 +93,18 @@ N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh)
   ops->nvminquotient  = N_VMinQuotient_PSBLAS;
 
   /* fused vector operations (optional, NULL means disabled by default) */
-  ops->nvlinearcombination = NULL;
-  ops->nvscaleaddmulti     = NULL;
-  ops->nvdotprodmulti      = NULL;
+  ops->nvlinearcombination = N_VLinearCombination_PSBLAS;
+  ops->nvscaleaddmulti     = N_VScaleAddMulti_PSBLAS;
+  ops->nvdotprodmulti      = N_VDotProdMulti_PSBLAS;
 
   /* vector array operations (optional, NULL means disabled by default) */
-  ops->nvlinearsumvectorarray         = NULL;
-  ops->nvscalevectorarray             = NULL;
-  ops->nvconstvectorarray             = NULL;
-  ops->nvwrmsnormvectorarray          = NULL;
-  ops->nvwrmsnormmaskvectorarray      = NULL;
-  ops->nvscaleaddmultivectorarray     = NULL;
-  ops->nvlinearcombinationvectorarray = NULL;
+  ops->nvlinearsumvectorarray         = N_VLinearSumVectorArray_PSBLAS;
+  ops->nvscalevectorarray             = N_VScaleVectorArray_PSBLAS;
+  ops->nvconstvectorarray             = N_VConstVectorArray_PSBLAS;
+  ops->nvwrmsnormvectorarray          = N_VWrmsNormVectorArray_PSBLAS;
+  ops->nvwrmsnormmaskvectorarray      = N_VWrmsNormMaskVectorArray_PSBLAS;
+  ops->nvscaleaddmultivectorarray     = N_VScaleAddMultiVectorArray_PSBLAS;
+  ops->nvlinearcombinationvectorarray = N_VLinearCombinationVectorArray_PSBLAS;
 
   /* Create content */
   content = NULL;
