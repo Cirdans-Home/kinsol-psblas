@@ -515,7 +515,12 @@ ONLY be called with an y that is guaranted to have all nonzero components*/
 void N_VScale_PSBLAS(realtype c, N_Vector x, N_Vector z){
 /* Scales the N_Vector x by the realtype scalar c and returns the results in z.
 */
-  psb_c_dgescal(NV_PVEC_P(x),c,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  //psb_c_dgescal(NV_PVEC_P(x),c,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  if(z==x){
+    psb_c_dgeaxpby((psb_d_t) 0.0,NV_PVEC_P(x), c, NV_PVEC_P(x),NV_DESCRIPTOR_P(x));
+  }else{
+    psb_c_dgeaxpbyz(c,NV_PVEC_P(x),(psb_d_t) 0.0, NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  }
   return;
 }
 
@@ -552,11 +557,21 @@ realtype N_VMaxNorm_PSBLAS(N_Vector x){
 }
 
 realtype N_VWrmsNorm_PSBLAS(N_Vector x, N_Vector w){
-  return(psb_c_dgenrm2_weight(NV_PVEC_P(x),NV_PVEC_P(w),NV_DESCRIPTOR_P(x)));
+  realtype twonorm,global_length;
+
+  twonorm = psb_c_dgenrm2_weight(NV_PVEC_P(x),NV_PVEC_P(w),NV_DESCRIPTOR_P(x));
+  global_length = N_VGetLength_PSBLAS(x);
+
+  return(twonorm/SUNRsqrt(global_length));
 }
 
 realtype N_VWrmsNormMask_PSBLAS(N_Vector x, N_Vector w, N_Vector id){
-  return(psb_c_dgenrm2_weightmask(NV_PVEC_P(x),NV_PVEC_P(w),NV_PVEC_P(id),NV_DESCRIPTOR_P(x)));
+  realtype twonorm,global_length;
+
+  twonorm = psb_c_dgenrm2_weightmask(NV_PVEC_P(x),NV_PVEC_P(w),NV_PVEC_P(id),NV_DESCRIPTOR_P(x));
+  global_length = N_VGetLength_PSBLAS(x);
+
+  return(twonorm/SUNRsqrt(global_length));
 }
 
 realtype N_VMin_PSBLAS(N_Vector x){
