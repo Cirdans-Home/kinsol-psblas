@@ -469,7 +469,9 @@ void N_VLinearSum_PSBLAS(realtype a, N_Vector x, realtype b, N_Vector y, N_Vecto
 x and y are of type N_Vector: z_i = a x_i + b y_i, i=0,...,n-1*/
 
   if(z == y){
-    psb_c_dgeaxpby(a, NV_PVEC_P(x), b, NV_PVEC_P(z), NV_DESCRIPTOR_P(x));
+    psb_c_dgeaxpby(a, NV_PVEC_P(x), b, NV_PVEC_P(y), NV_DESCRIPTOR_P(x));
+  }else if(z == x){
+    psb_c_dgeaxpby(b, NV_PVEC_P(y), a, NV_PVEC_P(x), NV_DESCRIPTOR_P(x));
   }else{
     psb_c_dgeaxpbyz(a, NV_PVEC_P(x), b, NV_PVEC_P(y), NV_PVEC_P(z), NV_DESCRIPTOR_P(x));
   }
