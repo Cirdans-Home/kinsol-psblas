@@ -705,7 +705,7 @@ int N_VScaleVectorArray_PSBLAS(int nvec, realtype* c, N_Vector* X, N_Vector* Z){
   int j;
 
   for(j=0;j<nvec;j++){
-    psb_c_dgescal(NV_PVEC_P(X[j]),c[j],NV_PVEC_P(Z[j]),NV_DESCRIPTOR_P(X[j]));
+    psb_c_dgeaxpbyz(c[j],NV_PVEC_P(X[j]),0.0,NV_PVEC_P(X[j]),NV_PVEC_P(Z[j]),NV_DESCRIPTOR_P(X[j]));
   }
 
   return(0);

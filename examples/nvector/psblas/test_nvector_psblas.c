@@ -195,18 +195,18 @@ int main(int argc, char *argv[])
   }
 
   /* fused operations */
-  // fails += Test_N_VLinearCombination(U, local_length, myid);
+  fails += Test_N_VLinearCombination(U, local_length, myid);
   fails += Test_N_VScaleAddMulti(U, local_length, myid);
   fails += Test_N_VDotProdMulti(U, local_length, global_length, myid);
 
   /* vector array operations */
   fails += Test_N_VLinearSumVectorArray(U, local_length, myid);
-  // fails += Test_N_VScaleVectorArray(U, local_length, myid);
+  fails += Test_N_VScaleVectorArray(U, local_length, myid);
   fails += Test_N_VConstVectorArray(U, local_length, myid);
   fails += Test_N_VWrmsNormVectorArray(U, local_length, myid);
   fails += Test_N_VWrmsNormMaskVectorArray(U, local_length, global_length, myid);
   fails += Test_N_VScaleAddMultiVectorArray(U, local_length, myid);
-  // fails += Test_N_VLinearCombinationVectorArray(U, local_length, myid);
+  fails += Test_N_VLinearCombinationVectorArray(U, local_length, myid);
 
   /* Fused and vector array operations tests (enabled) */
   if (myid == 0) printf("\nTesting fused and vector array operations (enabled):\n\n");
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
 
   /* vector array operations */
   fails += Test_N_VLinearSumVectorArray(V, local_length, myid);
-  // fails += Test_N_VScaleVectorArray(V, local_length, myid);
+  fails += Test_N_VScaleVectorArray(V, local_length, myid);
   fails += Test_N_VConstVectorArray(V, local_length, myid);
   fails += Test_N_VWrmsNormVectorArray(V, local_length, myid);
   fails += Test_N_VWrmsNormMaskVectorArray(V, local_length, global_length, myid);
@@ -295,7 +295,6 @@ void set_element(N_Vector X, sunindextype i, realtype val)
   irow[0] = i;
   value[0] = val;
   psb_c_dgeins(1,irow,value,NV_PVEC_P(X),NV_DESCRIPTOR_P(X));
-  //NV_Ith_P(X,i) = val;
   N_VAsb_PSBLAS(X);
 }
 
