@@ -77,25 +77,34 @@ int main(int argc, char *argv[])
   cdh=psb_c_new_descriptor();
   psb_c_set_index_base(0);
 
-  ng = (psb_l_t) global_length;
-  nb = nprocs;
-  nl = nb;
-  if ( (ng -myid*nb) < nl) nl = ng -myid*nb;
-  if ((vl=malloc(nb*sizeof(psb_l_t)))==NULL) {
-    fprintf(stderr,"On %d: malloc failure\n",myid);
-    psb_c_abort(ictxt);
-  }
-  i = ((psb_l_t)myid) * nb;
-  for (int k=0; k<nl; k++)
-    vl[k] = i+k;
+  // ng = (psb_l_t) global_length;
+  // nb = nprocs;
+  // nl = nb;
+  // if ( (ng -myid*nb) < nl) nl = ng -myid*nb;
+  // if ((vl=malloc(nb*sizeof(psb_l_t)))==NULL) {
+  //   fprintf(stderr,"On %d: malloc failure\n",myid);
+  //   psb_c_abort(ictxt);
+  // }
+  // i = ((psb_l_t)myid) * nb;
+  // for (int k=0; k<nl; k++)
+  //   vl[k] = i+k;
+  //
+  // if ((info=psb_c_cdall_vl(nl,vl,ictxt,cdh))!=0) {
+  //   fprintf(stderr,"From cdall: %d\nBailing out\n",info);
+  //   psb_c_abort(ictxt);
+  // }
 
-  if ((info=psb_c_cdall_vl(nl,vl,ictxt,cdh))!=0) {
+  if (info=psb_c_cdall_nl(local_length, ictxt, cdh)!=0) {
     fprintf(stderr,"From cdall: %d\nBailing out\n",info);
     psb_c_abort(ictxt);
   }
 
+  if ((info=psb_c_cdasb(cdh))!=0)  return(info);
 
   if (myid == 0) {
+    printf("-- PSBLAS descriptor allocated -- \n");
+    printf("Number of global rows : %ld\n", psb_c_cd_get_global_rows(cdh));
+    printf("Number of local rows : %d\n\n", psb_c_cd_get_local_rows(cdh));
     printf("Testing the parallel PSBLAS N_Vector \n");
     printf("Vector global length %ld \n", (long int) global_length);
     printf("MPI processes %d \n", nprocs);
@@ -107,145 +116,145 @@ int main(int argc, char *argv[])
     if (myid == 0) printf("FAIL: Unable to create a new empty vector \n\n");
     psb_c_abort(ictxt);
   }
+  //
+  //
+  X = N_VNew_PSBLAS(ictxt, cdh);
+  if (X == NULL) {
+    N_VDestroy_PSBLAS(W);
+    if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
+      psb_c_abort(ictxt);
+  }
 
-  //
-  // X = N_VNew_PSBLAS(comm, local_length, global_length);
-  // if (X == NULL) {
-  //   N_VDestroy(W);
-  //   if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
-  //   psb_c_abort(ictxt);
-  // }
-  //
-  // /* Check vector ID */
-  // fails += Test_N_VGetVectorID(X, SUNDIALS_NVEC_PARALLEL, myid);
-  //
-  // /* Test clone functions */
-  // fails += Test_N_VCloneEmpty(X, myid);
-  // fails += Test_N_VClone(X, local_length, myid);
-  // fails += Test_N_VCloneEmptyVectorArray(5, X, myid);
-  // fails += Test_N_VCloneVectorArray(5, X, local_length, myid);
-  //
-  // /* Test setting/getting array data */
+  /* Check vector ID */
+  fails += Test_N_VGetVectorID(X, SUNDIALS_NVEC_CUSTOM, myid);
+
+  /* Test clone functions */
+  fails += Test_N_VCloneEmpty(X, myid);
+  fails += Test_N_VClone(X, local_length, myid);
+  fails += Test_N_VCloneEmptyVectorArray(5, X, myid);
+  fails += Test_N_VCloneVectorArray(5, X, local_length, myid);
+
+  /* Test setting/getting array data */
   // fails += Test_N_VSetArrayPointer(W, local_length, myid);
-  // fails += Test_N_VGetArrayPointer(X, local_length, myid);
-  //
-  // /* Clone additional vectors for testing */
-  // Y = N_VClone(X);
-  // if (Y == NULL) {
-  //   N_VDestroy(W);
-  //   N_VDestroy(X);
-  //   if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
-  //   psb_c_abort(ictxt);
-  // }
-  //
-  // Z = N_VClone(X);
-  // if (Z == NULL) {
-  //   N_VDestroy(W);
-  //   N_VDestroy(X);
-  //   N_VDestroy(Y);
-  //   if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
-  //   psb_c_abort(ictxt);
-  // }
-  //
-  // /* Standard vector operation tests */
-  // if (myid == 0) printf("\nTesting standard vector operations:\n\n");
-  //
-  // fails += Test_N_VConst(X, local_length, myid);
-  // fails += Test_N_VLinearSum(X, Y, Z, local_length, myid);
+  fails += Test_N_VGetArrayPointer(X, local_length, myid);
+
+  /* Clone additional vectors for testing */
+  Y = N_VClone_PSBLAS(X);
+  if (Y == NULL) {
+    N_VDestroy_PSBLAS(W);
+    N_VDestroy_PSBLAS(X);
+    if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
+    psb_c_abort(ictxt);
+  }
+
+  Z = N_VClone_PSBLAS(X);
+  if (Z == NULL) {
+    N_VDestroy_PSBLAS(W);
+    N_VDestroy_PSBLAS(X);
+    N_VDestroy_PSBLAS(Y);
+    if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
+    psb_c_abort(ictxt);
+  }
+
+  /* Standard vector operation tests */
+  if (myid == 0) printf("\nTesting standard vector operations:\n\n");
+
+  fails += Test_N_VConst(X, local_length, myid);
+  fails += Test_N_VLinearSum(X, Y, Z, local_length, myid);
   // fails += Test_N_VProd(X, Y, Z, local_length, myid);
-  // fails += Test_N_VDiv(X, Y, Z, local_length, myid);
+  fails += Test_N_VDiv(X, Y, Z, local_length, myid);
   // fails += Test_N_VScale(X, Z, local_length, myid);
-  // fails += Test_N_VAbs(X, Z, local_length, myid);
-  // fails += Test_N_VInv(X, Z, local_length, myid);
+  fails += Test_N_VAbs(X, Z, local_length, myid);
+  fails += Test_N_VInv(X, Z, local_length, myid);
   // fails += Test_N_VAddConst(X, Z, local_length, myid);
-  // fails += Test_N_VDotProd(X, Y, local_length, global_length, myid);
-  // fails += Test_N_VMaxNorm(X, local_length, myid);
-  // fails += Test_N_VWrmsNorm(X, Y, local_length, myid);
-  // fails += Test_N_VWrmsNormMask(X, Y, Z, local_length, global_length, myid);
-  // fails += Test_N_VMin(X, local_length, myid);
-  // fails += Test_N_VWL2Norm(X, Y, local_length, global_length, myid);
+  fails += Test_N_VDotProd(X, Y, local_length, global_length, myid);
+  fails += Test_N_VMaxNorm(X, local_length, myid);
+  fails += Test_N_VWrmsNorm(X, Y, local_length, myid);
+  fails += Test_N_VWrmsNormMask(X, Y, Z, local_length, global_length, myid);
+  fails += Test_N_VMin(X, local_length, myid);
+  fails += Test_N_VWL2Norm(X, Y, local_length, global_length, myid);
   // fails += Test_N_VL1Norm(X, local_length, global_length, myid);
   // fails += Test_N_VCompare(X, Z, local_length, myid);
-  // fails += Test_N_VInvTest(X, Z, local_length, myid);
-  // fails += Test_N_VConstrMask(X, Y, Z, local_length, myid);
-  // fails += Test_N_VMinQuotient(X, Y, local_length, myid);
-  //
-  // /* Fused and vector array operations tests (disabled) */
-  // if (myid == 0) printf("\nTesting fused and vector array operations (disabled):\n\n");
-  //
-  // /* create vector and disable all fused and vector array operations */
-  // U = N_VNew_PSBLAS(comm, local_length, global_length);
-  // retval = N_VEnableFusedOps_PSBLAS(U, SUNFALSE);
-  // if (U == NULL || retval != 0) {
-  //   N_VDestroy(W);
-  //   N_VDestroy(X);
-  //   N_VDestroy(Y);
-  //   N_VDestroy(Z);
-  //   if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
-  //   psb_c_abort(ictxt);
-  // }
-  //
-  // /* fused operations */
+  fails += Test_N_VInvTest(X, Z, local_length, myid);
+  fails += Test_N_VConstrMask(X, Y, Z, local_length, myid);
+  fails += Test_N_VMinQuotient(X, Y, local_length, myid);
+
+  /* Fused and vector array operations tests (disabled) */
+  if (myid == 0) printf("\nTesting fused and vector array operations (disabled):\n\n");
+
+  /* create vector and disable all fused and vector array operations */
+  U = N_VNew_PSBLAS(ictxt, cdh);
+  retval = N_VEnableFusedOps_PSBLAS(U, SUNFALSE);
+  if (U == NULL || retval != 0) {
+    N_VDestroy_PSBLAS(W);
+    N_VDestroy_PSBLAS(X);
+    N_VDestroy_PSBLAS(Y);
+    N_VDestroy_PSBLAS(Z);
+    if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
+    psb_c_abort(ictxt);
+  }
+
+  /* fused operations */
   // fails += Test_N_VLinearCombination(U, local_length, myid);
-  // fails += Test_N_VScaleAddMulti(U, local_length, myid);
-  // fails += Test_N_VDotProdMulti(U, local_length, global_length, myid);
-  //
-  // /* vector array operations */
-  // fails += Test_N_VLinearSumVectorArray(U, local_length, myid);
+  fails += Test_N_VScaleAddMulti(U, local_length, myid);
+  fails += Test_N_VDotProdMulti(U, local_length, global_length, myid);
+
+  /* vector array operations */
+  fails += Test_N_VLinearSumVectorArray(U, local_length, myid);
   // fails += Test_N_VScaleVectorArray(U, local_length, myid);
-  // fails += Test_N_VConstVectorArray(U, local_length, myid);
-  // fails += Test_N_VWrmsNormVectorArray(U, local_length, myid);
-  // fails += Test_N_VWrmsNormMaskVectorArray(U, local_length, global_length, myid);
-  // fails += Test_N_VScaleAddMultiVectorArray(U, local_length, myid);
+  fails += Test_N_VConstVectorArray(U, local_length, myid);
+  fails += Test_N_VWrmsNormVectorArray(U, local_length, myid);
+  fails += Test_N_VWrmsNormMaskVectorArray(U, local_length, global_length, myid);
+  fails += Test_N_VScaleAddMultiVectorArray(U, local_length, myid);
   // fails += Test_N_VLinearCombinationVectorArray(U, local_length, myid);
-  //
-  // /* Fused and vector array operations tests (enabled) */
-  // if (myid == 0) printf("\nTesting fused and vector array operations (enabled):\n\n");
-  //
-  // /* create vector and enable all fused and vector array operations */
-  // V = N_VNew_PSBLAS(comm, local_length, global_length);
-  // retval = N_VEnableFusedOps_PSBLAS(V, SUNTRUE);
-  // if (V == NULL || retval != 0) {
-  //   N_VDestroy(W);
-  //   N_VDestroy(X);
-  //   N_VDestroy(Y);
-  //   N_VDestroy(Z);
-  //   N_VDestroy(U);
-  //   if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
-  //   psb_c_abort(ictxt);
-  // }
-  //
-  // /* fused operations */
+
+  /* Fused and vector array operations tests (enabled) */
+  if (myid == 0) printf("\nTesting fused and vector array operations (enabled):\n\n");
+
+  /* create vector and enable all fused and vector array operations */
+  V = N_VNew_PSBLAS(ictxt, cdh);
+  retval = N_VEnableFusedOps_PSBLAS(V, SUNTRUE);
+  if (V == NULL || retval != 0) {
+    N_VDestroy_PSBLAS(W);
+    N_VDestroy_PSBLAS(X);
+    N_VDestroy_PSBLAS(Y);
+    N_VDestroy_PSBLAS(Z);
+    N_VDestroy_PSBLAS(U);
+    if (myid == 0) printf("FAIL: Unable to create a new vector \n\n");
+    psb_c_abort(ictxt);
+  }
+
+  /* fused operations */
   // fails += Test_N_VLinearCombination(V, local_length, myid);
-  // fails += Test_N_VScaleAddMulti(V, local_length, myid);
-  // fails += Test_N_VDotProdMulti(V, local_length, global_length, myid);
-  //
-  // /* vector array operations */
-  // fails += Test_N_VLinearSumVectorArray(V, local_length, myid);
+  fails += Test_N_VScaleAddMulti(V, local_length, myid);
+  fails += Test_N_VDotProdMulti(V, local_length, global_length, myid);
+
+  /* vector array operations */
+  fails += Test_N_VLinearSumVectorArray(V, local_length, myid);
   // fails += Test_N_VScaleVectorArray(V, local_length, myid);
-  // fails += Test_N_VConstVectorArray(V, local_length, myid);
-  // fails += Test_N_VWrmsNormVectorArray(V, local_length, myid);
-  // fails += Test_N_VWrmsNormMaskVectorArray(V, local_length, global_length, myid);
-  // fails += Test_N_VScaleAddMultiVectorArray(V, local_length, myid);
-  // fails += Test_N_VLinearCombinationVectorArray(V, local_length, myid);
-  //
-  // /* Free vectors */
-  N_VDestroy(W);
-  // N_VDestroy(X);
-  // N_VDestroy(Y);
-  // N_VDestroy(Z);
-  // N_VDestroy(U);
-  // N_VDestroy(V);
-  //
-  // /* Print result */
-  // if (fails) {
-  //   printf("FAIL: NVector module failed %i tests, Proc %d \n\n", fails, myid);
-  // } else {
-  //   if (myid == 0)
-  //     printf("SUCCESS: NVector module passed all tests \n\n");
-  // }
-  //
-  // /* check if any other process failed */
+  fails += Test_N_VConstVectorArray(V, local_length, myid);
+  fails += Test_N_VWrmsNormVectorArray(V, local_length, myid);
+  fails += Test_N_VWrmsNormMaskVectorArray(V, local_length, global_length, myid);
+  fails += Test_N_VScaleAddMultiVectorArray(V, local_length, myid);
+  fails += Test_N_VLinearCombinationVectorArray(V, local_length, myid);
+
+  /* Free vectors */
+  N_VDestroy_PSBLAS(W);
+  N_VDestroy_PSBLAS(X);
+  N_VDestroy_PSBLAS(Y);
+  N_VDestroy_PSBLAS(Z);
+  N_VDestroy_PSBLAS(U);
+  N_VDestroy_PSBLAS(V);
+
+  /* Print result */
+  if (fails) {
+    printf("FAIL: NVector module failed %i tests, Proc %d \n\n", fails, myid);
+  } else {
+    if (myid == 0)
+      printf("SUCCESS: NVector_PSBLAS module passed all tests \n\n");
+  }
+
+  /* check if any other process failed */
   // (void) MPI_Allreduce(&fails, &globfails, 1, MPI_INT, MPI_MAX, comm);
 
   psb_c_exit(ictxt);
@@ -280,15 +289,20 @@ booleantype has_data(N_Vector X)
 
 void set_element(N_Vector X, sunindextype i, realtype val)
 {
+  psb_l_t irow[1];
+  double value[1];
   /* set i-th element of data array */
+  irow[0] = i;
+  value[0] = val;
+  psb_c_dgeins(1,irow,value,NV_PVEC_P(X),NV_DESCRIPTOR_P(X));
   //NV_Ith_P(X,i) = val;
+  N_VAsb_PSBLAS(X);
 }
 
 realtype get_element(N_Vector X, sunindextype i)
 {
   /* get i-th element of data array */
-  //return NV_Ith_P(X,i);
-  return 1;
+  return (N_VGetArrayPointer_PSBLAS(X))[i];
 }
 
 double max_time(N_Vector X, double time)
