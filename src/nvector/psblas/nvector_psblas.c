@@ -500,7 +500,7 @@ void N_VConst_PSBLAS(realtype c, N_Vector z)
 void N_VProd_PSBLAS(N_Vector x, N_Vector y, N_Vector z){
 /*Sets the N_Vector z to be the component-wise product of N_Vector inputs x and
 y: z_i = x_i y_i, i=0,...,n-1 */
-  psb_c_dgemlt2(1.0,NV_PVEC_P(x),NV_PVEC_P(y),0.0,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
+  psb_c_dgemlt2( (psb_d_t) 1.0,NV_PVEC_P(x),NV_PVEC_P(y), (psb_d_t) 0.0,NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
   return;
 }
 
