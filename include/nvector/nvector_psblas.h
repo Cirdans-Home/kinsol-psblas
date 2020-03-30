@@ -78,7 +78,7 @@ typedef struct _N_VectorContent_PSBLAS *N_VectorContent_PSBLAS;
 
 #define NV_PVEC_P(v)       ( NV_CONTENT_P(v)->pvec )
 
-#define NV_ICTXT_P(v)       ( NV_CONTENT_P(v)->ictxt )
+#define NV_ICTXT_P(v)      ( NV_CONTENT_P(v)->ictxt )
 
 /*
  * -----------------------------------------------------------------

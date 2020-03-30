@@ -398,23 +398,27 @@ N_Vector N_VCloneEmpty_PSBLAS(N_Vector w)
 N_Vector N_VClone_PSBLAS(N_Vector w)
 {
   N_Vector v;
-  realtype *data;
-  sunindextype local_length;
+  psb_c_dvector *data;
 
   v = NULL;
   v = N_VCloneEmpty_PSBLAS(w);
   if (v == NULL) return(NULL);
 
   NV_OWN_DATA_P(v) = SUNTRUE;
-  NV_PVEC_P(v)     = NV_PVEC_P(w);
+  data = psb_c_new_dvector();
+  psb_c_dgeall(data,NV_DESCRIPTOR_P(w));
+  NV_PVEC_P(v)     = data;
 
   return(v);
 }
 
 void N_VDestroy_PSBLAS(N_Vector v)
 {
+  psb_i_t info;
   if ((NV_OWN_DATA_P(v) == SUNTRUE) && (NV_PVEC_P(v) != NULL)) {
-    free(NV_PVEC_P(v));
+    if ((info=psb_c_dgefree(NV_PVEC_P(v),NV_DESCRIPTOR_P(v)))!=0){
+      printf("PSBLAS Error %d in freeing vector\n",info);
+    }
     NV_PVEC_P(v) = NULL;
   }
   free(v->content); v->content = NULL;
@@ -439,7 +443,15 @@ void N_VSpace_PSBLAS(N_Vector v, sunindextype *lrw, sunindextype *liw)
 
 realtype *N_VGetArrayPointer_PSBLAS(N_Vector v)
 {
-  return((realtype *) NV_PVEC_P(v));
+  realtype *pointer;
+
+  if(NV_PVEC_P(v) == NULL){
+    pointer = NULL;
+  }else{
+    pointer = psb_c_dvect_f_get_pnt(NV_PVEC_P(v));
+  }
+
+  return(pointer);
 }
 
 void N_VSetArrayPointer_PSBLAS(psb_c_dvector *v_data, N_Vector v)
@@ -472,10 +484,13 @@ void N_VConst_PSBLAS(realtype c, N_Vector z)
   double zt[1];
   zt[0]=c;
   ng = N_VGetLength_PSBLAS(z);
+
   for (glob_row=0; glob_row < ng; glob_row++) {
     irow[0]=glob_row;
     psb_c_dgeins(1,irow,zt,NV_PVEC_P(z) ,NV_DESCRIPTOR_P(z));
   }
+
+  N_VAsb_PSBLAS(z);
 
   return;
 }
