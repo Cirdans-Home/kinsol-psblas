@@ -587,7 +587,7 @@ i.e., res = ||w.*x||_2 = sqrt( sum_{j} (w_j x_j)^2 )*/
 
 realtype N_VL1Norm_PSBLAS(N_Vector x){
 /* Returns the 1-norm of the vector x */
-  return(psb_c_dspnrmi(NV_PVEC_P(x),NV_DESCRIPTOR_P(x)));
+  return(psb_c_dgenrmi(NV_PVEC_P(x),NV_DESCRIPTOR_P(x)));
 }
 
 void N_VCompare_PSBLAS(realtype c, N_Vector x, N_Vector z){
