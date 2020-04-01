@@ -93,18 +93,18 @@ N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh)
   ops->nvminquotient  = N_VMinQuotient_PSBLAS;
 
   /* fused vector operations (optional, NULL means disabled by default) */
-  ops->nvlinearcombination = N_VLinearCombination_PSBLAS;
-  ops->nvscaleaddmulti     = N_VScaleAddMulti_PSBLAS;
-  ops->nvdotprodmulti      = N_VDotProdMulti_PSBLAS;
+  ops->nvlinearcombination = NULL;
+  ops->nvscaleaddmulti     = NULL;
+  ops->nvdotprodmulti      = NULL;
 
   /* vector array operations (optional, NULL means disabled by default) */
-  ops->nvlinearsumvectorarray         = N_VLinearSumVectorArray_PSBLAS;
-  ops->nvscalevectorarray             = N_VScaleVectorArray_PSBLAS;
-  ops->nvconstvectorarray             = N_VConstVectorArray_PSBLAS;
-  ops->nvwrmsnormvectorarray          = N_VWrmsNormVectorArray_PSBLAS;
-  ops->nvwrmsnormmaskvectorarray      = N_VWrmsNormMaskVectorArray_PSBLAS;
-  ops->nvscaleaddmultivectorarray     = N_VScaleAddMultiVectorArray_PSBLAS;
-  ops->nvlinearcombinationvectorarray = N_VLinearCombinationVectorArray_PSBLAS;
+  ops->nvlinearsumvectorarray         = NULL;
+  ops->nvscalevectorarray             = NULL;
+  ops->nvconstvectorarray             = NULL;
+  ops->nvwrmsnormvectorarray          = NULL;
+  ops->nvwrmsnormmaskvectorarray      = NULL;
+  ops->nvscaleaddmultivectorarray     = NULL;
+  ops->nvlinearcombinationvectorarray = NULL;
 
   /* Create content */
   content = NULL;
@@ -646,8 +646,15 @@ int N_VLinearCombination_PSBLAS(int nvec, realtype* c, N_Vector* V,N_Vector z){
     return(0);
   }
 
-  for(j=0;j<nvec;j++){
-    ierr = psb_c_dgeaxpby( c[j], NV_PVEC_P(V[j]), 1.0, NV_PVEC_P(z), NV_DESCRIPTOR_P(z));
+  if(z == V[1]){
+    for(j=0;j<nvec;j++){
+      ierr = psb_c_dgeaxpbyz( c[j], NV_PVEC_P(V[j]),0.0,NV_PVEC_P(z), NV_PVEC_P(z), NV_DESCRIPTOR_P(z));
+    }
+  }
+  else{
+    for(j=0;j<nvec;j++){
+      ierr = psb_c_dgeaxpby( c[j], NV_PVEC_P(V[j]), 1.0, NV_PVEC_P(z), NV_DESCRIPTOR_P(z));
+    }
   }
 
   return(ierr);
@@ -667,8 +674,8 @@ int N_VScaleAddMulti_PSBLAS(int nvec, realtype* a, N_Vector x,N_Vector* Y, N_Vec
   }
 
   for(j=0;j<nvec;j++){
-    N_VLinearSum_PSBLAS(a[j], x, 1.0, Y[j], Z[j]);
-    return(0);
+    psb_c_dgeaxpbyz((psb_d_t) a[j],NV_PVEC_P(x),(psb_d_t) 1.0,NV_PVEC_P(Y[j]),NV_PVEC_P(Z[j]),NV_DESCRIPTOR_P(Y[j]));
+    if(j==nvec-1) return(0);
   }
 
 
