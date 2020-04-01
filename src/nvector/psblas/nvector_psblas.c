@@ -733,7 +733,7 @@ int N_VWrmsNormVectorArray_PSBLAS(int nvecs, N_Vector* X, N_Vector* W, realtype*
   for(j=0; j<nvecs; j++){
     nrm[j] = N_VWrmsNorm(X[j],W[j]);
   }
-  return(1);
+  return(0);
 };
 int N_VWrmsNormMaskVectorArray_PSBLAS(int nvec, N_Vector* X, N_Vector* W, N_Vector id,realtype* nrm){
   int j;
