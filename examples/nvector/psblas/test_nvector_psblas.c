@@ -161,12 +161,12 @@ int main(int argc, char *argv[])
 
   fails += Test_N_VConst(X, local_length, myid);
   fails += Test_N_VLinearSum(X, Y, Z, local_length, myid);
-  // fails += Test_N_VProd(X, Y, Z, local_length, myid);
+  fails += Test_N_VProd(X, Y, Z, local_length, myid);
   fails += Test_N_VDiv(X, Y, Z, local_length, myid);
   fails += Test_N_VScale(X, Z, local_length, myid);
   fails += Test_N_VAbs(X, Z, local_length, myid);
   fails += Test_N_VInv(X, Z, local_length, myid);
-  // fails += Test_N_VAddConst(X, Z, local_length, myid);
+  fails += Test_N_VAddConst(X, Z, local_length, myid);
   fails += Test_N_VDotProd(X, Y, local_length, global_length, myid);
   fails += Test_N_VMaxNorm(X, local_length, myid);
   fails += Test_N_VWrmsNorm(X, Y, local_length, myid);
@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
   fails += Test_N_VMin(X, local_length, myid);
   fails += Test_N_VWL2Norm(X, Y, local_length, global_length, myid);
   fails += Test_N_VL1Norm(X, local_length, global_length, myid);
-  // fails += Test_N_VCompare(X, Z, local_length, myid);
+  fails += Test_N_VCompare(X, Z, local_length, myid);
   fails += Test_N_VInvTest(X, Z, local_length, myid);
   fails += Test_N_VConstrMask(X, Y, Z, local_length, myid);
   fails += Test_N_VMinQuotient(X, Y, local_length, myid);
