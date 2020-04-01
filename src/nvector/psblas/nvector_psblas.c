@@ -813,8 +813,115 @@ int N_VScaleAddMultiVectorArray_PSBLAS(int nvec, int nsum, realtype* a, N_Vector
     return(0);
 };
 int N_VLinearCombinationVectorArray_PSBLAS(int nvec, int nsum, realtype* c, N_Vector** X, N_Vector* Z){
- return(1);
-};
+  int          i; /* vector arrays index in summation [0,nsum) */
+  int          j; /* vector index in vector array     [0,nvec) */
+  sunindextype k; /* element index in vector                   */
+
+  realtype*    ctmp;
+  N_Vector*    Y;
+
+  /* invalid number of vectors */
+  if (nvec < 1) return(-1);
+  if (nsum < 1) return(-1);
+
+  /* ---------------------------
+   * Special cases for nvec == 1
+   * --------------------------- */
+
+  if (nvec == 1) {
+
+    /* should have called N_VScale */
+    if (nsum == 1) {
+      N_VScale_PSBLAS(c[0], X[0][0], Z[0]);
+      return(0);
+    }
+
+    /* should have called N_VLinearSum */
+    if (nsum == 2) {
+      N_VLinearSum_PSBLAS(c[0], X[0][0], c[1], X[1][0], Z[0]);
+      return(0);
+    }
+
+    /* should have called N_VLinearCombination */
+    Y = (N_Vector *) malloc(nsum * sizeof(N_Vector));
+
+    for (i=0; i<nsum; i++) {
+      Y[i] = X[i][0];
+    }
+
+    psb_c_dgeaxpbyz(c[0],NV_PVEC_P(Y[0]),0.0,NV_PVEC_P(Y[0]),NV_PVEC_P(Z[0]),NV_DESCRIPTOR_P(Z[0]));
+    for (i=1; i<nsum; i++) {
+      psb_c_dgeaxpby(c[i],NV_PVEC_P(Y[i]),1.0,NV_PVEC_P(Z[0]),NV_DESCRIPTOR_P(Z[0]));
+    }
+
+    free(Y);
+    return(0);
+  }
+
+  /* --------------------------
+   * Special cases for nvec > 1
+   * -------------------------- */
+
+  /* should have called N_VScaleVectorArray */
+  if (nsum == 1) {
+
+    ctmp = (realtype*) malloc(nvec * sizeof(realtype));
+
+    for (j=0; j<nvec; j++) {
+      ctmp[j] = c[0];
+    }
+
+    N_VScaleVectorArray_PSBLAS(nvec, ctmp, X[0], Z);
+
+    free(ctmp);
+    return(0);
+  }
+
+  /* should have called N_VLinearSumVectorArray */
+  if (nsum == 2) {
+    N_VLinearSumVectorArray_PSBLAS(nvec, c[0], X[0], c[1], X[1], Z);
+    return(0);
+  }
+
+  /* --------------------------
+   * Compute linear combination
+   * -------------------------- */
+
+  /*
+   * X[0][j] += c[i]*X[i][j], i = 1,...,nvec-1
+   */
+  if ((X[0] == Z) && (c[0] == (psb_d_t) 1.0)) {
+    for (j=0; j<nvec; j++) {
+      for (i=1; i<nsum; i++) {
+        psb_c_dgeaxpby(c[i],NV_PVEC_P(X[i][j]),(psb_d_t) 1.0,NV_PVEC_P(X[0][j]),NV_DESCRIPTOR_P(X[i][j]));
+      }
+    }
+    return(0);
+  }
+
+  /*
+   * X[0][j] = c[0] * X[0][j] + sum{ c[i] * X[i][j] }, i = 1,...,nvec-1
+   */
+  if (X[0] == Z) {
+    for (j=0; j<nvec; j++) {
+      N_VScale_PSBLAS(c[0],X[0][j],X[0][j]);
+      for (i=1; i<nsum; i++) {
+        psb_c_dgeaxpby(c[i],NV_PVEC_P(X[i][j]),(psb_d_t) 1.0,NV_PVEC_P(X[0][j]),NV_DESCRIPTOR_P(X[0][j]));
+      }
+    }
+    return(0);
+  }
+
+  /*
+   * Z[j] = sum{ c[i] * X[i][j] }, i = 0,...,nvec-1
+   */
+  for (j=0; j<nvec; j++) {
+    for (i=0; i<nsum; i++) {
+      psb_c_dgeaxpby(c[i],NV_PVEC_P(X[i][j]),(psb_d_t) 1.0,NV_PVEC_P(Z[j]),NV_DESCRIPTOR_P(Z[j]));
+    }
+  }
+  return(0);
+}
 
 /*
  * -----------------------------------------------------------------
