@@ -751,7 +751,7 @@ int N_VWrmsNormMaskVectorArray_PSBLAS(int nvec, N_Vector* X, N_Vector* W, N_Vect
   for(j=0; j<nvec; j++){
     nrm[j] = N_VWrmsNormMask_PSBLAS(X[j],W[j],id);
   }
-  return(1);
+  return(0);
 };
 int N_VScaleAddMultiVectorArray_PSBLAS(int nvec, int nsum, realtype* a, N_Vector* X, N_Vector** Y, N_Vector** Z){
   int          i, j, retval;
