@@ -291,8 +291,11 @@ void set_element(N_Vector X, sunindextype i, realtype val)
 {
   psb_l_t irow[1];
   double value[1];
+  psb_i_t myid,nprocs;
+
+  psb_c_info(NV_ICTXT_P(X),&myid,&nprocs);
   /* set i-th element of data array */
-  irow[0] = i;
+  irow[0] = myid*N_VGetLocalLength_PSBLAS(X) + i;
   value[0] = val;
   psb_c_dgeins(1,irow,value,NV_PVEC_P(X),NV_DESCRIPTOR_P(X));
   N_VAsb_PSBLAS(X);
