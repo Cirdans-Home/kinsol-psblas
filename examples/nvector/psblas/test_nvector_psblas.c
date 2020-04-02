@@ -46,10 +46,13 @@ int main(int argc, char *argv[])
   psb_i_t      nb, nl;            /* Local lenth               */
   psb_l_t      *vl;               /* Vector needed for descritor construction */
   psb_l_t      i;
+  /* MPI Comminicator */
+  MPI_Comm     comm;
 
   /* Get processor number and total number of processes */
   ictxt = psb_c_init();
   psb_c_info(ictxt,&myid,&nprocs);
+  comm = MPI_Comm_f2c(ictxt);
 
   /* check inputs */
   if (argc < 3) {
@@ -255,7 +258,7 @@ int main(int argc, char *argv[])
   }
 
   /* check if any other process failed */
-  // (void) MPI_Allreduce(&fails, &globfails, 1, MPI_INT, MPI_MAX, comm);
+  (void) MPI_Allreduce(&fails, &globfails, 1, MPI_INT, MPI_MAX, comm);
 
   psb_c_exit(ictxt);
 
@@ -310,9 +313,12 @@ realtype get_element(N_Vector X, sunindextype i)
 double max_time(N_Vector X, double time)
 {
   double maxt;
+  MPI_Comm comm;
+
+  comm = MPI_Comm_f2c(NV_ICTXT_P(X));
 
   /* get max time across all MPI ranks */
-  // (void) MPI_Reduce(&time, &maxt, 1, MPI_DOUBLE, MPI_MAX, 0, NV_COMM_P(X));
+  (void) MPI_Reduce(&time, &maxt, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
   return(maxt);
 }
 
