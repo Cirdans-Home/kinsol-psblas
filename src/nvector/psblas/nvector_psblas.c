@@ -601,13 +601,15 @@ z_i = 1 if |x_i| < c else z_i = 0 for i=1,...,length(x)*/
 booleantype N_VInvTest_PSBLAS(N_Vector x, N_Vector z){
 /* Computes z_i = 1/x_i iff x_i != 0, returns true if every test was positive,
 otherwise returns false */
-  bool ret;
   psb_i_t info;
 
-  info = psb_c_dgeinv_check(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x));
-  ret = info;
+  info = psb_c_dgeinv_check(NV_PVEC_P(x),NV_PVEC_P(z),NV_DESCRIPTOR_P(x),1);
 
-  return(ret);
+  if(info == (psb_i_t) 1){
+    return(SUNTRUE);
+  }else{
+    return(SUNFALSE);
+  }
 }
 
 booleantype N_VConstrMask_PSBLAS(N_Vector c, N_Vector x, N_Vector m){
