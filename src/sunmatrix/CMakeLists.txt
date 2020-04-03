@@ -18,4 +18,7 @@
 add_subdirectory(band)
 add_subdirectory(dense)
 add_subdirectory(sparse)
-
+# Add the PSBLAS subdirectory if PSBLAS/MLD2P4 and theire extensions are available
+if(PSBLAS_FOUND AND MLD2P4_FOUND AND PSBLAS_EXT_FOUND AND MLD2P4_EXT_FOUND)
+     add_subdirectory(psblas)
+endif(PSBLAS_FOUND AND MLD2P4_FOUND AND PSBLAS_EXT_FOUND AND MLD2P4_EXT_FOUND)
