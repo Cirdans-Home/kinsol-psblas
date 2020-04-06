@@ -267,6 +267,10 @@ void SUNMatDestroy_PSBLAS(SUNMatrix A)
 
 int SUNMatZero_PSBLAS(SUNMatrix A)
 {
+  bool clear = SUNTRUE;
+  // The PSBLAS matrix contained in A will be in the UPDATE state at the of
+  // this call
+  psb_c_dsprn(SM_PMAT_P(A), SM_DESCRIPTOR_P(A), clear);
   return 0;
 }
 
