@@ -100,6 +100,10 @@ SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A,
                                                   int ictxt,
                                                   psb_c_descriptor *cdh);
 
+SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromSparseMatrix(SUNMatrix A,
+                                                  int ictxt,
+                                                  psb_c_descriptor *cdh);
+
 // SUNDIALS_EXPORT int SUNPSBLASMatrix_Realloc(SUNMatrix A);
 
 // SUNDIALS_EXPORT int SUNPSBLASMatrix_Reallocate(SUNMatrix A, sunindextype NNZ);

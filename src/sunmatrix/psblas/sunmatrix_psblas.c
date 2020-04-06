@@ -108,7 +108,7 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
  * if the request for matrix storage cannot be satisfied.
  */
 
-SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix Ad, realtype droptol, int sparsetype, int ictxt, psb_c_descriptor *cdh)
+SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A, realtype droptol, int sparsetype, int ictxt, psb_c_descriptor *cdh)
 {
   SUNMatrix As;
 
@@ -122,7 +122,20 @@ SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix Ad, realtype droptol, int sparsetyp
  * if the request for matrix storage cannot be satisfied.
  */
 
-SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix Ad, realtype droptol, int sparsetype, int ictxt, psb_c_descriptor *cdh)
+SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A, realtype droptol, int sparsetype, int ictxt, psb_c_descriptor *cdh)
+{
+  SUNMatrix As;
+
+  return(As);
+}
+
+/* ----------------------------------------------------------------------------
+ * Function to create a new PSBLAS matrix from an existing sparse matrix
+ * by copying all nonzero values into the PSBLAS matrix structure.  Returns NULL
+ * if the request for matrix storage cannot be satisfied.
+ */
+
+SUNMatrix SUNPSBLASFromSparseMatrix(SUNMatrix A, int ictxt, psb_c_descriptor *cdh)
 {
   SUNMatrix As;
 
