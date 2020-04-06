@@ -35,6 +35,7 @@
 #include <mpi.h>
 #include "psb_base_cbind.h"
 #include "psb_c_base.h"
+#include "psb_util_cbind.h"
 #include <sundials/sundials_matrix.h>
 #include <sunmatrix/sunmatrix_dense.h>
 #include <sunmatrix/sunmatrix_band.h>
@@ -103,7 +104,7 @@ SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A,
 
 // SUNDIALS_EXPORT int SUNPSBLASMatrix_Reallocate(SUNMatrix A, sunindextype NNZ);
 
-SUNDIALS_EXPORT void SUNPSBLASMatrix_Print(SUNMatrix A, FILE* outfile);
+SUNDIALS_EXPORT void SUNPSBLASMatrix_Print(SUNMatrix A, char *matrixtitle, char* filename);
 
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Rows(SUNMatrix A);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Columns(SUNMatrix A);
