@@ -82,7 +82,6 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
 
   content->ictxt = ictxt;
   content->cdh   = cdh;
-  content->sparsetype = PSBLAS_MAT;
   ah  = psb_c_new_dspmat();
   ret = psb_c_dspall(ah,cdh);
   if(ret == 0){
@@ -108,7 +107,7 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
  * if the request for matrix storage cannot be satisfied.
  */
 
-SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A, realtype droptol, int sparsetype, int ictxt, psb_c_descriptor *cdh)
+SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A, realtype droptol, int ictxt, psb_c_descriptor *cdh)
 {
   SUNMatrix As;
 
@@ -122,9 +121,13 @@ SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A, realtype droptol, int sparsetype
  * if the request for matrix storage cannot be satisfied.
  */
 
-SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A, realtype droptol, int sparsetype, int ictxt, psb_c_descriptor *cdh)
+SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A, realtype droptol, int ictxt, psb_c_descriptor *cdh)
 {
+  sunindextype i, j, nnz;
+  sunindextype M, N;
   SUNMatrix As;
+
+
 
   return(As);
 }
@@ -179,14 +182,6 @@ sunindextype SUNPSBLASMatrix_NNZ(SUNMatrix A)
 {
   if (SUNMatGetID(A) == SUNMATRIX_CUSTOM)
     return(psb_c_dnnz(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)));
-  else
-    return -1;
-}
-
-int SUNPSBLASMatrix_PSBLASType(SUNMatrix A)
-{
-  if (SUNMatGetID(A) == SUNMATRIX_CUSTOM)
-    return PSBLAS_MAT;
   else
     return -1;
 }
@@ -248,7 +243,6 @@ SUNMatrix SUNMatClone_PSBLAS(SUNMatrix A)
 
   content->ictxt = SM_ICTXT_P(A);
   content->cdh   = SM_DESCRIPTOR_P(A);
-  content->sparsetype = PSBLAS_MAT;
   ah  = psb_c_new_dspmat();
   ret = psb_c_dspall(ah,SM_DESCRIPTOR_P(A));
   if(ret == 0){

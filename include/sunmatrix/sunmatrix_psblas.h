@@ -45,21 +45,11 @@
 extern "C" {
 #endif
 
-/* ------------------------
- * Matrix Type Definitions
- * ------------------------ */
-
-#define CSC_MAT 0
-#define CSR_MAT 1
-#define PSBLAS_MAT 2
-
-
 /* ------------------------------------------
  * Sparse Implementation of SUNMATRIX_SPARSE
  * ------------------------------------------ */
 
 struct _SUNMatrixContent_PSBLAS {
-  int sparsetype;
   psb_c_descriptor *cdh;       /* descriptor for data distribution */
   psb_c_dspmat  *ah;           /* PSBLAS sparse matrix             */
   int ictxt;                   /* PSBLAS communicator              */
@@ -73,8 +63,6 @@ typedef struct _SUNMatrixContent_PSBLAS *SUNMatrixContent_PSBLAS;
  * --------------------------------------- */
 
 #define SM_CONTENT_P(A)     ( (SUNMatrixContent_PSBLAS)(A->content) )
-
-#define SM_SPARSETYPE_P(A)  ( SM_CONTENT_P(A)->sparsetype )
 
 #define SM_DESCRIPTOR_P(A)  ( SM_CONTENT_P(A)->cdh )
 
@@ -90,13 +78,11 @@ SUNDIALS_EXPORT SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh);
 
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A,
                                                    realtype droptol,
-                                                   int sparsetype,
                                                    int ictxt,
                                                    psb_c_descriptor *cdh);
 
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A,
                                                   realtype droptol,
-                                                  int sparsetype,
                                                   int ictxt,
                                                   psb_c_descriptor *cdh);
 
@@ -114,7 +100,6 @@ SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Rows(SUNMatrix A);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Columns(SUNMatrix A);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_NNZ(SUNMatrix A);
 // SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_NP(SUNMatrix A);
-SUNDIALS_EXPORT int SUNPSBLASMatrix_PSBLASType(SUNMatrix A);
 SUNDIALS_EXPORT realtype* SUNPSBLASMatrix_Data(SUNMatrix A);
 // SUNDIALS_EXPORT sunindextype* SUNPSBLASMatrix_IndexValues(SUNMatrix A);
 // SUNDIALS_EXPORT sunindextype* SUNPSBLASMatrix_IndexPointers(SUNMatrix A);
