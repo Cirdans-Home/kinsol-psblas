@@ -99,52 +99,6 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
   return(A);
 }
 
-
-
-/* ----------------------------------------------------------------------------
- * Function to create a new sparse matrix from an existing dense matrix
- * by copying all nonzero values into the sparse matrix structure.  Returns NULL
- * if the request for matrix storage cannot be satisfied.
- */
-
-SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A, realtype droptol, int ictxt, psb_c_descriptor *cdh)
-{
-  SUNMatrix As;
-
-  return(As);
-}
-
-
-/* ----------------------------------------------------------------------------
- * Function to create a new sparse matrix from an existing band matrix
- * by copying all nonzero values into the sparse matrix structure.  Returns NULL
- * if the request for matrix storage cannot be satisfied.
- */
-
-SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A, realtype droptol, int ictxt, psb_c_descriptor *cdh)
-{
-  sunindextype i, j, nnz;
-  sunindextype M, N;
-  SUNMatrix As;
-
-
-
-  return(As);
-}
-
-/* ----------------------------------------------------------------------------
- * Function to create a new PSBLAS matrix from an existing sparse matrix
- * by copying all nonzero values into the PSBLAS matrix structure.  Returns NULL
- * if the request for matrix storage cannot be satisfied.
- */
-
-SUNMatrix SUNPSBLASFromSparseMatrix(SUNMatrix A, int ictxt, psb_c_descriptor *cdh)
-{
-  SUNMatrix As;
-
-  return(As);
-}
-
 /* ----------------------------------------------------------------------------
  * Function to print the sparse matrix
  */
@@ -184,16 +138,6 @@ sunindextype SUNPSBLASMatrix_NNZ(SUNMatrix A)
     return(psb_c_dnnz(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)));
   else
     return -1;
-}
-
-realtype* SUNPSBLASMatrix_Data(SUNMatrix A)
-{
-  realtype dummy[10];
-
-  if (SUNMatGetID(A) == SUNMATRIX_CUSTOM)
-    return dummy;
-  else
-    return NULL;
 }
 
 /*

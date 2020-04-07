@@ -75,35 +75,21 @@ typedef struct _SUNMatrixContent_PSBLAS *SUNMatrixContent_PSBLAS;
  * ---------------------------------------- */
 
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh);
-
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A,
                                                    realtype droptol,
                                                    int ictxt,
                                                    psb_c_descriptor *cdh);
-
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A,
                                                   realtype droptol,
                                                   int ictxt,
                                                   psb_c_descriptor *cdh);
-
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromSparseMatrix(SUNMatrix A,
                                                   int ictxt,
                                                   psb_c_descriptor *cdh);
-
-// SUNDIALS_EXPORT int SUNPSBLASMatrix_Realloc(SUNMatrix A);
-
-// SUNDIALS_EXPORT int SUNPSBLASMatrix_Reallocate(SUNMatrix A, sunindextype NNZ);
-
 SUNDIALS_EXPORT void SUNPSBLASMatrix_Print(SUNMatrix A, char *matrixtitle, char* filename);
-
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Rows(SUNMatrix A);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Columns(SUNMatrix A);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_NNZ(SUNMatrix A);
-// SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_NP(SUNMatrix A);
-SUNDIALS_EXPORT realtype* SUNPSBLASMatrix_Data(SUNMatrix A);
-// SUNDIALS_EXPORT sunindextype* SUNPSBLASMatrix_IndexValues(SUNMatrix A);
-// SUNDIALS_EXPORT sunindextype* SUNPSBLASMatrix_IndexPointers(SUNMatrix A);
-
 SUNDIALS_EXPORT SUNMatrix_ID SUNMatGetID_PSBLAS(SUNMatrix A);
 SUNDIALS_EXPORT SUNMatrix SUNMatClone_PSBLAS(SUNMatrix A);
 SUNDIALS_EXPORT void SUNMatDestroy_PSBLAS(SUNMatrix A);
