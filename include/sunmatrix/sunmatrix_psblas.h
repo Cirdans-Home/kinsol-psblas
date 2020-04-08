@@ -34,12 +34,14 @@
 #include <stdio.h>
 #include <mpi.h>
 #include "psb_base_cbind.h"
-#include "psb_c_base.h"
+#include "psb_c_dbase.h"
 #include "psb_util_cbind.h"
 #include <sundials/sundials_matrix.h>
 #include <sunmatrix/sunmatrix_dense.h>
 #include <sunmatrix/sunmatrix_band.h>
 #include <sunmatrix/sunmatrix_sparse.h>
+
+#undef I
 
 #ifdef __cplusplus  /* wrapper to enable C++ usage */
 extern "C" {
