@@ -253,3 +253,31 @@ int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw){
 
   return 0;
 }
+
+/*
+ * -----------------------------------------------------------------
+ * Auxiliary matrix operations
+ * -----------------------------------------------------------------
+ */
+
+ int SUNMatAsb_PSBLAS(SUNMatrix A){
+   /* Assemble a PSBLAS sparse matrix */
+    if(psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A))){
+      return 0;
+    }else{
+      return(psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)));
+    }
+ }
+
+ int SUNMatIns_PSBLAS(psb_i_t nz, const psb_l_t *irw, const psb_l_t *icl,
+ 			const psb_d_t *val,SUNMatrix A){
+   /* This is just an overload of the psb_c_dspins function, can be used
+   to explicitly avoiding the user accessing the SM_PMAT_P(A) pointer */
+
+   /* If the matrix was already in ASSEMBLED state, it puts into UPDATE */
+   if(psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A))){
+     psb_c_dset_matupd(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
+   }
+
+   return(psb_c_dspins(nz, irw, icl, val, SM_PMAT_P(A), SM_DESCRIPTOR_P(A)));
+ }

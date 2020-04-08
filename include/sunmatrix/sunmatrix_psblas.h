@@ -77,17 +77,7 @@ typedef struct _SUNMatrixContent_PSBLAS *SUNMatrixContent_PSBLAS;
  * ---------------------------------------- */
 
 SUNDIALS_EXPORT SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh);
-SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromDenseMatrix(SUNMatrix A,
-                                                   realtype droptol,
-                                                   int ictxt,
-                                                   psb_c_descriptor *cdh);
-SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromBandMatrix(SUNMatrix A,
-                                                  realtype droptol,
-                                                  int ictxt,
-                                                  psb_c_descriptor *cdh);
-SUNDIALS_EXPORT SUNMatrix SUNPSBLASFromSparseMatrix(SUNMatrix A,
-                                                  int ictxt,
-                                                  psb_c_descriptor *cdh);
+
 SUNDIALS_EXPORT void SUNPSBLASMatrix_Print(SUNMatrix A, char *matrixtitle, char* filename);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Rows(SUNMatrix A);
 SUNDIALS_EXPORT sunindextype SUNPSBLASMatrix_Columns(SUNMatrix A);
@@ -101,7 +91,12 @@ SUNDIALS_EXPORT int SUNMatScaleAdd_PSBLAS(realtype c, SUNMatrix A, SUNMatrix B);
 SUNDIALS_EXPORT int SUNMatScaleAddI_PSBLAS(realtype c, SUNMatrix A);
 SUNDIALS_EXPORT int SUNMatMatvec_PSBLAS(SUNMatrix A, N_Vector x, N_Vector y);
 SUNDIALS_EXPORT int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw);
-
+/* ----------------------------------------
+ * Auxiliary Functions for SUNMATRIX_PSBLAS
+ * ---------------------------------------- */
+SUNDIALS_EXPORT int SUNMatAsb_PSBLAS(SUNMatrix A);
+SUNDIALS_EXPORT int SUNMatIns_PSBLAS(psb_i_t nz, const psb_l_t *irw, const psb_l_t *icl,
+ 			const psb_d_t *val,SUNMatrix A);
 
 #ifdef __cplusplus
 }
