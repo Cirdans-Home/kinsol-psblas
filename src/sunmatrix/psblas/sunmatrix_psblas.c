@@ -27,8 +27,8 @@
 #include <sundials/sundials_nvector.h>
 #include <sundials/sundials_math.h>
 
-#define ZERO RCONST(0.0)
-#define ONE  RCONST(1.0)
+#define ZERO (psb_d_t) 0.0
+#define ONE  (psb_d_t) 1.0
 
 /*
  * -----------------------------------------------------------------
@@ -221,8 +221,7 @@ int SUNMatZero_PSBLAS(SUNMatrix A)
   bool clear = SUNTRUE;
   // The PSBLAS matrix contained in A will be in the UPDATE state at the of
   // this call
-  psb_c_dsprn(SM_PMAT_P(A), SM_DESCRIPTOR_P(A), clear);
-  return 0;
+  return(psb_c_dsprn(SM_PMAT_P(A), SM_DESCRIPTOR_P(A), clear));
 }
 
 int SUNMatCopy_PSBLAS(SUNMatrix A, SUNMatrix B)
@@ -232,22 +231,25 @@ int SUNMatCopy_PSBLAS(SUNMatrix A, SUNMatrix B)
 
 int SUNMatScaleAddI_PSBLAS(realtype c, SUNMatrix A)
 {
-
-  return 0;
+  return(psb_c_dspscalpid(c,SM_PMAT_P(A),SM_DESCRIPTOR_P(A)));
 }
 
 int SUNMatScaleAdd_PSBLAS(realtype c, SUNMatrix A, SUNMatrix B)
 {
-  /* return success */
-  return(0);
-
+  return(psb_c_dspaxpby(c,SM_PMAT_P(A),ONE,SM_PMAT_P(B),SM_DESCRIPTOR_P(A)));
 }
 
 int SUNMatMatvec_PSBLAS(SUNMatrix A, N_Vector x, N_Vector y)
 {
 
-  psb_c_dspmm( (psb_d_t) 1.0, SM_PMAT_P(A), NV_PVEC_P(x) ,
-  		    (psb_d_t) 1.0, NV_PVEC_P(y) , NV_DESCRIPTOR_P(x));
+  return(psb_c_dspmm( (psb_d_t) 1.0, SM_PMAT_P(A), NV_PVEC_P(x) ,
+  		    (psb_d_t) 1.0, NV_PVEC_P(y) , NV_DESCRIPTOR_P(x)));
+}
+
+int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw){
+  /* This function is advisory only, for use in determining a user's
+  total space requirements, for this module it is a dummy function
+  always returning true.*/
 
   return 0;
 }
