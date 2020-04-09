@@ -203,7 +203,7 @@ The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the ve
 	
 	The PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh| are the one defined for the whole programs, the integer \lstinline[style=CStyle]{m} is the number of rows in \lstinline[style=CStyle]{val[]} to be inserted, the array of integers \lstinline[style=CStyle]{irow} is the indices of the rows to be inserted. Specifically, row \lstinline[style=CStyle]|i| of \lstinline[style=CStyle]|val| will be inserted into the local row corresponding to the global index row index \lstinline[style=CStyle]|row[i]|.
 	
-	\attention This routine does not assemble the final vector. After the insertion of all the elements has been completed then the vector should be assembled by means of the \texttt{N\_VAss\_PSBLAS} routine.
+	\attention This routine does not assemble the final vector. After the insertion of all the elements has been completed then the vector should be assembled by means of the \texttt{N\_VAsb\_PSBLAS} routine.
 	
 	\item[\fbox{\texttt{N\_VAsb\_PSBLAS}}] This routine assemble the NVector after that all the elements have been inserted into it, i.e., after that all the calls to the \texttt{N\_VMake\_PSBLAS} routine have been completed. This is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dgeasb|.
 	
@@ -237,7 +237,210 @@ The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the ve
 	
 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VPrintFile_PSBLAS(N_Vector x, FILE* outfile)|
 	
+	\item[\fbox{\texttt{N\_VGetVectorID\_PSBLAS}}] This function returns the SUNDIALS identificative for the PSBLAS vector, since this is a custom implementation it returns the integer constant \lstinline[style=CStyle]|SUNDIALS_NVEC_CUSTOM|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector_ID N_VGetVectorID_PSBLAS(N_Vector v)|
+ 	
+ 	\item[\fbox{\texttt{N\_VCloneEmpty\_PSBLAS}}] Clones a NVECTOR\_PSBLAS with a \lstinline[style=CStyle]|NULL| \lstinline[style=CStyle]|pvec| field, and with value \lstinline[style=CStyle]|SUNFALSE| in the \lstinline[style=CStyle]|own_data| field.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VCloneEmpty_PSBLAS(N_Vector w)|
+ 	
+ 	\item[\fbox{\texttt{N\_VClone\_PSBLAS}}] Clones a NVECTOR\_PSBLAS allocating its memory following the same communicator of the cloned one.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VClone_PSBLAS(N_Vector w)|
+ 	
+ 	\item[\fbox{\texttt{N\_VDestroy\_PSBLAS}}] Destroys a NVECTOR\_PSBLAS freeing both the memory allocated for the corresponding PSBLAS vector, and the memory allocated for the NVECTOR\_PSBLAS structure.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VDestroy_PSBLAS(N_Vector v)|
+ 	
+ 	\item[\fbox{\texttt{N\_VSpace\_PSBLAS}}] Returns storage requirements for one NVECTOR\_PSBLAS. \lstinline[style=CStyle]|lrw| contains the number of realtype words and \lstinline[style=CStyle]|liw| contains the number of integer words.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VSpace_PSBLAS(N_Vector v, sunindextype *lrw,sunindextype *liw)|
+ 	
+ 	\item[\fbox{\texttt{N\_VGetArrayPointer\_PSBLAS}}] Returns a pointer to a realtype array from the NVECTOR\_PSBLAS, this is the local portion of the distributed PSBLAS vector encapsulated in the \texttt{N\_Vector} object.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype *N_VGetArrayPointer_PSBLAS(N_Vector v)|
+ 	
+ 	\item[\fbox{\texttt{N\_VSetArrayPointer\_PSBLAS}}] This function is a dummy function, in PSBLAS we use \lstinline[language=Fortran]|allocatable| objects for the local part of the distributed vector, and, moreover, we assume having an arbitrary distribution of the indexes.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VSetArrayPointer_PSBLAS(psb_c_dvector *v_data, N_Vector v)|
+ 	
+ 	\item[\fbox{\texttt{N\_VLinearSum\_PSBLAS}}] Performs the AXPBY BLAS operation between to  NVECTOR\_PSBLAS, the result can be both out-of- and in-place.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VLinearSum_PSBLAS(realtype a, N_Vector x, realtype b, N_Vector y, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VConst\_PSBLAS}}] Sets all components of the NVECTOR\_PSBLAS to a constant value and assembles it, the user \textbf{does not need} to assembly it.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VConst_PSBLAS(realtype c, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VProd\_PSBLAS}}] Performs the entry-wise multiplication of two NVECTOR\_PSBLAS, the result can be both out-of- and in-place.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VProd_PSBLAS(N_Vector x, N_Vector y, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VDiv\_PSBLAS}}] Performs the entry-wise division of two NVECTOR\_PSBLAS, the result can be both out-of- and in-place, it does not check for possible zero entries in the denumerator. It is up to the user to guarantee that this does not happens.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VDiv_PSBLAS(N_Vector x, N_Vector y, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VScale\_PSBLAS}}] Scales an NVECTOR\_PSBLAS by a scalar c, the result can be both out-of- and in-place.
+ 	 
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VScale_PSBLAS(realtype c, N_Vector x, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VAbs\_PSBLAS}}] Sets the entries of an NVECTOR\_PSBLAS to the absolute values of the entries of the input.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VAbs_PSBLAS(N_Vector x, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VInv\_PSBLAS}}] Sets the entries of an NVECTOR\_PSBLAS to the inverse of the entries of the input. It does not check for possible zero entries in the vector. It is up to the user to guarantee that this does not happens.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VInv_PSBLAS(N_Vector x, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VAddConst\_PSBLAS}}] Adds a scalar to all components of an NVECTOR\_PSBLAS and returns the result in another NVECTOR\_PSBLAS object.
+ 	 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VAddConst_PSBLAS(N_Vector x, realtype b, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VDotProd\_PSBLAS}}] Compute the dot product of two NVECTOR\_PSBLAS objects.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VDotProd_PSBLAS(N_Vector x, N_Vector y)|
+ 	
+ 	\item[\fbox{\texttt{N\_VMaxNorm\_PSBLAS}}] Compute the max norm of an NVECTOR\_PSBLAS object.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VMaxNorm_PSBLAS(N_Vector x)|
+ 	
+ 	\item[\fbox{\texttt{N\_VWrmsNorm\_PSBLAS}}] Compute the weighted (by the size) 2-norm of an NVECTOR\_PSBLAS object.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VWrmsNorm_PSBLAS(N_Vector x, N_Vector w)|
+ 	
+ 	\item[\fbox{\texttt{N\_VWrmsNormMask\_PSBLAS}}] Returns the weighted root mean square norm of the NVECTOR\_PSBLAS \lstinline[style=CStyle]|x| with
+ 	realtype weight vector \lstinline[style=CStyle]|w| built using only the elements of \lstinline[style=CStyle]|x| corresponding
+ 	to positive elements of the NVECTOR\_PSBLAS \lstinline[style=CStyle]|id|.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VWrmsNormMask_PSBLAS(N_Vector x,N_Vector w,N_Vector id)|
+ 	
+ 	\item[\fbox{\texttt{N\_VMin\_PSBLAS}}] Gives back the minimum entry of an NVECTOR\_PSBLAS object.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VMin_PSBLAS(N_Vector x)|
+ 	
+ 	\item[\fbox{\texttt{N\_VWL2Norm\_PSBLAS}}] Returns the weighted Euclidean $2$-norm of the NVECTOR\_PSBLAS \lstinline[style=CStyle]|x| with realtype weight vector \lstinline[style=CStyle]|w|.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VWL2Norm_PSBLAS(N_Vector x, N_Vector w)|
+ 	
+ 	\item[\fbox{\texttt{N\_VL1Norm\_PSBLAS}}] Computes the 1-norm of an NVECTOR\_PSBLAS object.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VL1Norm_PSBLAS(N_Vector x)|
+ 	
+ 	\item[\fbox{\texttt{N\_VCompare\_PSBLAS}}] Compares the components of the NVECTOR\_PSBLAS \lstinline[style=CStyle]|x| to the realtype scalar \lstinline[style=CStyle]|c|
+ 	and returns an NVECTOR\_PSBLAS \lstinline[style=CStyle]|z| such that 
+ 	\begin{equation*}
+ 	z_i = \begin{cases}
+ 	1.0, & |x_i| \geq c,\\
+ 	0.0, & |x_i| \le c.
+ 	\end{cases}
+ 	\end{equation*}
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VCompare_PSBLAS(realtype c, N_Vector x, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VInvTest\_PSBLAS}}] Sets the entries of an NVECTOR\_PSBLAS to the inverse of the entries of the input. It checks for possible zero entries in the vector. This routine returns a boolean assigned to \lstinline[style=CStyle]|SUNTRUE| if all
+ 	components of the vector are nonzero (successful inversion) and returns \lstinline[style=CStyle]|SUNFALSE| otherwise.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|booleantype N_VInvTest_PSBLAS(N_Vector x, N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VConstrMask\_PSBLAS}}] Performs the following constraint tests: $x_i > 0$ if $c_i = 2$, $x_i \geq 0$ if $c_i = 1$,
+ 	$x_i \leq 0$ if $c_i = -1$, $x_i < 0$ if $c_i = -2$. There is no constraint on $x_i$ if $c_i = 0$.
+ 	This routine returns a boolean assigned to \lstinline[style=CStyle]|SUNFALSE| if any element failed
+ 	the constraint test and assigned to \lstinline[style=CStyle]|SUNTRUE| if all passed. It also sets a
+ 	mask vector \lstinline[style=CStyle]|m|, with elements equal to \lstinline[style=CStyle]|1.0| where the constraint test failed,
+ 	and \lstinline[style=CStyle]|0.0| where the test passed. This routine is used only for constraint
+ 	checking.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|booleantype N_VConstrMask_PSBLAS(N_Vector c, N_Vector x, N_Vector m)|
+ 	 
+ 	\item[\fbox{\texttt{N\_VMinQuotient\_PSBLAS}}] This routine returns the minimum of the quotients obtained by term-wise
+ 	dividing \lstinline[style=CStyle]|num[i]| by \lstinline[style=CStyle]|denom[i]| . A zero element in \lstinline[style=CStyle]|denom| will be skipped. If no
+ 	such quotients are found, then the large value \lstinline[style=CStyle]|BIG REAL| (defined in the
+ 	header file sundials \texttt{types.h}) is returned.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|realtype N_VMinQuotient_PSBLAS(N_Vector num, N_Vector denom)|
+ 	
 \end{description}
+
+\subsubsection{Fused operation}
+\begin{description}
+ 	\item[\fbox{\texttt{N\_VLinearCombination\_PSBLAS}}] This routine computes the linear combination of \lstinline[style=CStyle]|nv| vectors with \lstinline[style=CStyle]|n| elements
+ 	\begin{equation*}
+ 		z_i = \sum_{j=0}^{n_v - 1} c_j x_{j,i}, \qquad i=0,\ldots,n-1
+ 	\end{equation*}
+ 	where \lstinline[style=CStyle]|c| is an array of \lstinline[style=CStyle]|nv| scalars, \lstinline[style=CStyle]|X| is an array of NVECTOR\_PSBLAS. When \lstinline[style=CStyle]|z| is one of the vectors in \lstinline[style=CStyle]|X|, then it is assumed to be the first vector in the vector array.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VLinearCombination_PSBLAS(int nvec, realtype* c, N_Vector* V,N_Vector z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VScaleAddMulti\_PSBLAS}}] This routine scales and adds one vector to \lstinline[style=CStyle]|nv| vectors with \lstinline[style=CStyle]|n| elements:
+ 	\begin{equation*}
+ 		z_{j,i} = c_j x_i + y_{j,i}, \qquad j=0,\ldots,n_v-1, \qquad i=0,\ldots,n-1,
+ 	\end{equation*}
+ 	where \lstinline[style=CStyle]|c| is an array of \lstinline[style=CStyle]|nv| scalars.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VScaleAddMulti_PSBLAS(int nvec, realtype* a, N_Vector x, N_Vector* Y, N_Vector* Z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VDotProdMulti\_PSBLAS}}] This routine computes the dot product of a vector with \lstinline[style=CStyle]|nv| other vectors.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VDotProdMulti_PSBLAS(int nvec, N_Vector x,N_Vector *Y, realtype* dotprods)|
+ \end{description}
+	\subsubsection{Vector array operations}
+ \begin{description}
+ 	\item[\fbox{\texttt{N\_VLinearSumVectorArray\_PSBLAS}}] This routine computes the linear sum of two vector arrays
+ 	containing \lstinline[style=CStyle]|nv| vectors of \lstinline[style=CStyle]|n| elements:
+ 	\begin{equation*}
+ 		z_{j,i} = a x_{j,i} + b y_{j,i}, \qquad i=0,\ldots,n-1, \qquad j=0,\ldots,n_v -1.
+ 	\end{equation*}
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VLinearSumVectorArray_PSBLAS(int nvec, realtype a, N_Vector* X, realtype b, N_Vector* Y, N_Vector* Z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VScaleVectorArray\_PSBLAS}}] This routine scales each vector of \lstinline[style=CStyle]|n| elements in a vector
+ 	array of \lstinline[style=CStyle]|n_v| vectors by a (potentially different) constant:
+ 	\begin{equation*}
+ 		z_{j,i} = c_j x_{j,i}, \qquad i=0,\ldots,n-1, \qquad j=0,\ldots,n_v-1.
+ 	\end{equation*}
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VScaleVectorArray_PSBLAS(int nvec, realtype* c,N_Vector* X, N_Vector* Z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VConstVectorArray\_PSBLAS}}] This routine sets each element in a vector of \lstinline[style=CStyle]|n|  elements in a vector array of \lstinline[style=CStyle]|nv|  vectors to the same value.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VConstVectorArray_PSBLAS(int nvecs, realtype c,N_Vector* Z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VWrmsNormVectorArray\_PSBLAS}}] This routine computes the weighted root mean square
+ 	norm of \lstinline[style=CStyle]|nv| vectors with \lstinline[style=CStyle]|n| elements.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VWrmsNormVectorArray_PSBLAS(int nvecs, N_Vector* X,N_Vector* W, realtype* nrm)|
+ 	
+ 	\item[\fbox{\texttt{N\_VWrmsNormMaskVectorArray\_PSBLAS}}] This routine computes the masked weighted root mean square norm of \lstinline[style=CStyle]|nv| vectors with \lstinline[style=CStyle]|n| elements.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VWrmsNormMaskVectorArray_PSBLAS(int nvec, N_Vector* X,N_Vector* W, N_Vector id,realtype* nrm)|
+ 	
+ 	\item[\fbox{\texttt{N\_VScaleAddMultiVectorArray\_PSBLAS}}] This routine scales and adds a vector in a vector array of
+ 	\lstinline[style=CStyle]|nv| vectors to the corresponding vector in \lstinline[style=CStyle]|ns| vector arrays.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VScaleAddMultiVectorArray_PSBLAS(int nvec, int nsum, realtype* a, N_Vector* X, N_Vector** Y, N_Vector** Z)|
+ 	
+ 	\item[\fbox{\texttt{N\_VLinearCombinationVectorArray\_PSBLAS}}] This routine computes the linear combination of \lstinline[style=CStyle]|ns| vector
+ 	arrays containing \lstinline[style=CStyle]|nv| vectors with \lstinline[style=CStyle]|n| elements.
+ 	
+ 	\marginlabel{Prototype} \lstinline[style=CStyle]|int N_VLinearCombinationVectorArray_PSBLAS(int nvec, int nsum, realtype* c, N_Vector** X, N_Vector* Z)|
+\end{description}
+
+By default all fused and vector array operations are disabled in the nvector PSBLAS module.
+The following additional user-callable routines are provided to enable or disable fused and vector
+array operations for a specific vector.
+\begin{lstlisting}[style=CStyle]
+int N_VEnableFusedOps_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableLinearCombination_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableScaleAddMulti_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableDotProdMulti_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableLinearSumVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableScaleVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableConstVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableWrmsNormVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableWrmsNormMaskVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableScaleAddMultiVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableLinearCombinationVectorArray_PSBLAS(N_Vector v,booleantype tf);
+\end{lstlisting}
 
 \section{The SUNMATRIX\_PSBLAS implementation}\label{sec:sunmatrix}
 
