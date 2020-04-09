@@ -6,6 +6,8 @@
 \usepackage{csquotes}
 \usepackage{hyperref}
 \usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
 
 \title{PSBLAS-KINSOL interface}
 \author{Istituto per le Applicazioni del Calcolo ``M. Picone'',\\
@@ -41,7 +43,7 @@
 	showtabs=false,                  
 	tabsize=2,
 	language=C,
-	morekeywords={N_Vector,sunindextype,psb_i_t,psb_c_descriptor,psb_c_dvector,booleantype}
+	morekeywords={N_Vector,sunindextype,psb_i_t,psb_c_descriptor,psb_c_dvector,booleantype,psb_c_info,psb_c_init,psb_cdall,psb_c_cdall_vl,psb_l_t}
 }
 
 \usepackage[backend=biber]{biblatex}
@@ -53,9 +55,100 @@
 	\tableofcontents
 	\newpage
 	
-	\section{The NVECTOR\_PSBLAS implementation}
-	The NVECTOR\_PSBLAS implementation of the SUNDIALS NVECTOR module provides an interface to the PSBLAS code for handling distributed dense vectors. Information on the PSBLAS data structures, and functions that are mentioned along the text can be found in~\cite{psblasguide}.
+	\section{The logic behind a PSBLAS instrumented application}
 	
+	The main aim of the PSBLAS library is the parallel implementation of iterative solvers
+	for sparse linear systems,
+	\begin{equation}\label{eq:linear_system}
+		A \mathbf{x} = \mathbf{b}, \qquad A \in \mathbb{K}^{n \times n}, \qquad \mathbb{K} = \mathbb{R}, \mathbb{C},
+	\end{equation}
+	through the distributed memory paradigm operating with message
+	passing. The library includes all the needed routines for this task, e.g, functions for multiplying sparse matrices by dense matrices, for solving block diagonal systems with triangular diagonal entries or for preprocessing sparse matrices.
+	
+	The pivotal choice to be made in this setting regards the distribution of the coefficient matrix $A$ for the linear system~\eqref{eq:linear_system}. In PSBLAS this choice is based on the \textbf{owner computes rule} \marginlabel{\textbf{Owner computes rule}}: each unknown is assigned to a process that will  own the corresponding row in the coefficient matrix and
+	will  carry out all related computations. 
+	
+	If $A$ is obtained from the discretization of a Partial Differential Equation (PDE), this allocation strategy is equivalent to the choice of a partition of the mesh into {\em
+		sub-domains}.
+	 
+	\attention PSBLAS supports \emph{any} distribution that keeps together 
+	the coefficients of each matrix row there are \textbf{no other} constraints on
+	the variable assignment. 
+	
+	Any PSBLAS application will always start with the construction of the parallel environment, i.e., of an MPI (virtual) parallel machine, that we call here context by means of the \lstinline[style=CStyle]|psb_c_init| function~as
+\begin{lstlisting}[style=CStyle]
+psb_i_t ictxt, iam, np;
+ictxt = psb_c_init();
+psb_c_info(ictxt,&iam,&np);
+\end{lstlisting}
+	that creates a parallel environment on \lstinline[style=CStyle]|np| processors $0,\ldots,\lstinline[style=CStyle]|np|-1$, of which we are process \lstinline[style=CStyle]|iam|.
+	
+	The next step is represented by the need of subdividing the index space among processes, and this creates a mapping from the ``global'' numbering $1,\ldots,n$ to a ``local'' numbering
+	in each process. This means that each process $i$ will own a certain subset
+	$1,\ldots,n_{\hbox{row}_i}$, each element of which corresponds to a certain element of $1\dots n$.
+	
+	Therefore, after the initialization the first step is to establish an index space, and
+	this is done with a call to one of the variants of the \lstinline[style=CStyle]|psb_cdall| function to allocate a descriptor object \lstinline[style=CStyle]|psb_c_descriptor|:
+\begin{description}
+	\item[\fbox{\texttt{psb\_c\_cdall\_vg}}] the association between an index and a process is specified via an integer vector \lstinline[style=CStyle]|vg[]|, each index $i \in \{1,\ldots,\lstinline[style=CStyle]|ng|\}$ is assigned to process \lstinline[style=CStyle]|vg[i]|. The vector \lstinline[style=CStyle]|vg[]| must be identical on all calling processes, and its entries have the ranges $(0,\ldots,\lstinline[style=CStyle]|np|-1)$ or
+	$(1,\ldots,\lstinline[style=CStyle]|np|)$ according to the fact that \lstinline[style=CStyle]|psb_c_set_index_base(0)| or \lstinline[style=CStyle]|psb_c_set_index_base(1)| has been called at the beginning. The size \lstinline[style=CStyle]|ng| is specified one can chose to use the entire
+	vector \lstinline[style=CStyle]|vg[]|, thus having \lstinline[style=CStyle]|vg[ng]|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_vg(psb_l_t ng,psb_i_t *vg,psb_i_t ictxt,psb_c_descriptor *cdh);|
+	\item[\fbox{\texttt{psb\_c\_cdall\_vl}}] the association is done by specifying the list of indices \lstinline[style=CStyle]|vl[nl]| assigned to
+	the current process; thus, the global problem size \lstinline[style=CStyle]|nl| is given by
+	the range of the aggregate of the individual vectors \lstinline[style=CStyle]|vl[]| specified in
+	the calling processes. The subroutine will check how
+	many times each entry in the global index space $(1,\ldots,\lstinline[style=CStyle]|nl|)$ is specified
+	in the input lists \lstinline[style=CStyle]|vl[]|, therefore it allows for the presence of overlap in the
+	input, and checks for the ``orphan'' indices. 
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_vl(psb_i_t nl,psb_l_t *vl,psb_i_t ictxt,psb_c_descriptor *cdh);|
+	\item[\fbox{\texttt{psb\_c\_cdall\_nl}}] produces a generalized block-row distribution of the number of indices belonging to the current process in which each process $i$ gets assigned
+	a consecutive chunk of $nl$ global indices,
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_nl(psb_i_t nl,psb_i_t ictxt, psb_c_descriptor *cdh);|
+\end{description}
+	for the case of a simple minded block distribution, i.e., the index space is first numbered sequentially in a standard way, then the corresponding vector is distributed according to a block distribution directive. 
+	%The discretization ensures there are IDIM *internal* points in each direction.
+	
+\noindent\rule{\columnwidth}{0.4pt}
+We consider as example the finite difference discretization of the following boundary value problem
+\begin{equation*}
+	- \frac{b_1 \partial^2 u}{\partial x^2} - \frac{b_2 \partial^2 u}{\partial y^2} + \frac{a_1 \partial u}{\partial x} + \frac{a_2 \partial u}{\partial y} + a_3 u = 0, \qquad (x,y,z) \in [0,1]^3,
+\end{equation*}
+with Dirichlet boundary conditions, on a uniform grid with \lstinline[style=CStyle]|idim| node per size. All the allocation procedure can be expressed as
+\begin{lstlisting}[style=CStyle]
+psb_c_descriptor *cdh;
+psb_i_t idim,nb,nlr, nl;
+psb_l_t i,ng, *vl, k;
+
+cdh=psb_c_new_descriptor();
+psb_c_set_index_base(0);
+
+/* Simple minded BLOCK data distribution */ 
+ng = ((psb_l_t) idim)*idim*idim;  
+nb = (ng+np-1)/np;
+nl = nb;
+if ( (ng -iam*nb) < nl) nl = ng -iam*nb; 
+fprintf(stderr,"%d: Input data %d %ld %d %d\n",iam,idim,ng,nb, nl);
+if ((vl=malloc(nb*sizeof(psb_l_t)))==NULL) {
+	fprintf(stderr,"On %d: malloc failure\n",iam);
+	psb_c_abort(ictxt);
+}
+i = ((psb_l_t)iam) * nb;
+for (k=0; k<nl; k++)
+	vl[k] = i+k; 
+\end{lstlisting}
+\noindent\rule{\columnwidth}{0.4pt}	
+
+	Now that the initial distribution of the index space has been performed, we need to allocate  dense vectors and sparse matrices on such index space, and thus we define the complete topology of our computational problem. Since our task is to use the capabilities of SUNDIALS-KINSOL to solve for nonlinear problems, here lies the core of the interfacing between the two codes. In the next two Sections~\ref{sec:nvector}, and Section~\ref{sec:sunmatrix} we describe such encapsulation for dense vector, and sparse matrices. Then in Section~\ref{sec:sunlinsol} we describe the interfacing with the \textbf{linear solvers} and \textbf{preconditioners} 
+
+	Complete information on the PSBLAS data structures, and functions that are mentioned along the text can be found in~\cite{psblasguide}.
+	
+	
+	\section{The NVECTOR\_PSBLAS implementation}\label{sec:nvector}
+	The NVECTOR\_PSBLAS implementation of the SUNDIALS NVECTOR module provides an interface to the PSBLAS code for handling distributed dense vectors. 
 	It defines the \emph{content} field of \texttt{N\_Vector} to be a structure containing the PSBLAS descriptor for the data distribution, a PSBLAS vector of double, and the PSBLAS communicator (context).
 	
 \begin{lstlisting}[style=CStyle]
@@ -146,6 +239,11 @@ The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the ve
 	
 \end{description}
 
+\section{The SUNMATRIX\_PSBLAS implementation}\label{sec:sunmatrix}
+
+\section{The SUNLINSOL\_PSBLAS implementation}\label{sec:sunlinsol}
+
+\subsection{Algebraic Multigrid Preconditioners}
 
 \printbibliography
 
