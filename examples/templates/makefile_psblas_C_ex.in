@@ -1,0 +1,81 @@
+# -*- mode: makefile -*-
+# -----------------------------------------------------------------
+# Programmer: F. Durastante @ IAC-CNR
+# -----------------------------------------------------------------
+# SUNDIALS Copyright Start
+# Copyright (c) 2002-2019, Lawrence Livermore National Security
+# and Southern Methodist University.
+# All rights reserved.
+#
+# See the top-level LICENSE and NOTICE files for details.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+# SUNDIALS Copyright End
+# -----------------------------------------------------------------
+# Makefile for @SOLVER@ parallel examples
+#
+# This file is generated from a template using various variables
+# set at configuration time. It can be used as a template for
+# other user Makefiles.
+# -----------------------------------------------------------------
+
+SHELL = @SHELL@
+
+prefix       = @prefix@
+exec_prefix  = @exec_prefix@
+includedir   = @includedir@
+libdir       = @libdir@
+
+include $(prefix)/Make.inc
+PSBC_LIBS= -L$(prefix)/lib -lpsb_cbind
+PSB_LIBS=-lpsb_krylov -lpsb_prec -lpsb_base -L$(prefix)/lib
+
+CPP         = @CPP@
+CPPFLAGS    = @CPPFLAGS@
+CC          = @CC@
+CFLAGS      = @CFLAGS@ $(PSBCDEFINES)
+LDFLAGS     = @LDFLAGS@ $(PSBC_LIBS) $(PSB_LIBS) $(LAPACK) $(BLAS) $(METIS_LIB) $(AMD_LIB) -lm -lgfortran
+LIBS        = @LIBS@ $(PSBC_LIBS) $(PSB_LIBS) $(LAPACK) $(BLAS) $(METIS_LIB) $(AMD_LIB) -lm -lgfortran
+
+LINKFLAGS = -Wl,-rpath,@libdir@
+
+MPICC       = @MPICC@
+MPIF90      = @MPIF90@
+MPI_INC_DIR = @MPI_INC_DIR@
+MPI_LIB_DIR = @MPI_LIB_DIR@
+MPI_LIBS    = @MPI_LIBS@
+MPI_FLAGS   = @MPI_FLAGS@
+
+TMP_INCS  = ${includedir} ${MPI_INC_DIR} $(CINCLUDES) $(FINCLUDES)
+INCLUDES  = $(addprefix -I, ${TMP_INCS})
+LIBRARIES = -l@SOLVER_LIB@ -lsundials_nvecpsblas ${LIBS}
+
+EXAMPLES = @EXAMPLES@
+EXAMPLES_DEPENDENCIES = @EXAMPLES_DEPENDENCIES@
+
+OBJECTS = ${EXAMPLES:=.o}
+OBJECTS_DEPENDENCIES = ${EXAMPLES_DEPENDENCIES:=.o}
+
+# -----------------------------------------------------------------------------------------
+
+.SUFFIXES : .o .c
+
+.c.o :
+	${MPFC} ${CPPFLAGS} ${CFLAGS} ${MPI_FLAGS} ${INCLUDES} -c $<
+
+# -----------------------------------------------------------------------------------------
+
+all: ${OBJECTS}
+	@for i in ${EXAMPLES} ; do \
+	  echo "${MPFC} -o $${i} $${i}.o ${OBJECTS_DEPENDENCIES} ${MPI_FLAGS} ${CFLAGS} ${LDFLAGS} ${INCLUDES} -L${libdir} ${LIBRARIES} -L${MPI_LIB_DIR} ${MPI_LIBS} ${LINKFLAGS}" ; \
+	  ${MPFC} -o $${i} $${i}.o ${OBJECTS_DEPENDENCIES} ${MPI_FLAGS} ${CFLAGS} ${LDFLAGS} ${INCLUDES} -L${libdir} ${LIBRARIES} -L${MPI_LIB_DIR} ${MPI_LIBS} ${LINKFLAGS} ; \
+	done
+
+${OBJECTS}: ${OBJECTS_DEPENDENCIES}
+
+clean:
+	rm -f ${OBJECTS_DEPENDENCIES}
+	rm -f ${OBJECTS}
+	rm -f ${EXAMPLES}
+
+# -----------------------------------------------------------------------------------------
