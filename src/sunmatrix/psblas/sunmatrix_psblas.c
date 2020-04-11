@@ -84,7 +84,7 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
   content->cdh   = cdh;
   ah  = psb_c_new_dspmat();
   ret = psb_c_dspall(ah,cdh);
-  if(ret == 0){
+  if(ret != 0){
     free(content);
     free(ops);
     free(A);
@@ -105,8 +105,8 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
 
 void SUNPSBLASMatrix_Print(SUNMatrix A, char *matrixtitle, char* filename)
 {
-
-  psb_c_dmm_mat_write( SM_PMAT_P(A), matrixtitle, filename);
+  // FIXME ERROR ON COMPILATION IN TEST!
+  // psb_c_dmm_mat_write( SM_PMAT_P(A), matrixtitle, filename);
 
   return;
 }
@@ -189,7 +189,7 @@ SUNMatrix SUNMatClone_PSBLAS(SUNMatrix A)
   content->cdh   = SM_DESCRIPTOR_P(A);
   ah  = psb_c_new_dspmat();
   ret = psb_c_dspall(ah,SM_DESCRIPTOR_P(A));
-  if(ret == 0){
+  if(ret != 0){
     free(content);
     free(ops);
     free(B);
