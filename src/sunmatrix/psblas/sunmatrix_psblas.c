@@ -82,15 +82,14 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
 
   content->ictxt = ictxt;
   content->cdh   = cdh;
-  ah  = psb_c_new_dspmat();
-  ret = psb_c_dspall(ah,cdh);
+  content->ah    = psb_c_new_dspmat();
+  ret = psb_c_dspall(content->ah,cdh);
   if(ret != 0){
     free(content);
     free(ops);
     free(A);
     return(NULL);
   }
-  content->ah = ah;
 
   /* Attach content and ops */
   A->content = content;
@@ -269,7 +268,16 @@ int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw){
 
  int SUNMatAsb_PSBLAS(SUNMatrix A){
    /* Assemble a PSBLAS sparse matrix */
-    if(psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A))){
+  bool check;
+
+  if( A == NULL){
+    fprintf(stderr,"Error during matrix build loop for I\n");
+    return(1);
+  }
+
+  check = psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
+
+    if(check){
       return 0;
     }else{
       return(psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)));
@@ -280,9 +288,16 @@ int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw){
  			const psb_d_t *val,SUNMatrix A){
    /* This is just an overload of the psb_c_dspins function, can be used
    to explicitly avoiding the user accessing the SM_PMAT_P(A) pointer */
+   bool check;
 
+   if( A == NULL){
+     fprintf(stderr,"Error during matrix build loop for I\n");
+     return(1);
+   }
+
+   check = psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
    /* If the matrix was already in ASSEMBLED state, it puts into UPDATE */
-   if(psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A))){
+   if(check){
      psb_c_dset_matupd(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
    }
 
