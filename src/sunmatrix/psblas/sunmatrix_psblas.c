@@ -226,7 +226,14 @@ int SUNMatZero_PSBLAS(SUNMatrix A)
 
 int SUNMatCopy_PSBLAS(SUNMatrix A, SUNMatrix B)
 {
-  return(psb_c_dcopy_mat(SM_PMAT_P(A),SM_PMAT_P(B),SM_DESCRIPTOR_P(A)));
+  psb_c_dcopy_mat(SM_PMAT_P(A),SM_PMAT_P(B),SM_DESCRIPTOR_P(A));
+
+  if(psb_c_dis_matasb(SM_PMAT_P(B),SM_DESCRIPTOR_P(A))){
+    return(0);
+  }else{
+    return(psb_c_dspasb(SM_PMAT_P(B),SM_DESCRIPTOR_P(B)));
+  }
+
 }
 
 int SUNMatScaleAddI_PSBLAS(realtype c, SUNMatrix A)
