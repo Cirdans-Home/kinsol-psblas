@@ -215,7 +215,7 @@ IF(EXAMPLES_INSTALL)
   IF(UNIX)
     # generate Makefile and place it in the binary dir
     CONFIGURE_FILE(
-      ${PROJECT_SOURCE_DIR}/examples/templates/makefile_serial_C_ex.in
+      ${PROJECT_SOURCE_DIR}/examples/templates/makefile_psblas_C_ex.in
       ${PROJECT_BINARY_DIR}/examples/sunmatrix/psblas/Makefile_ex
       @ONLY
       )
