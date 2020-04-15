@@ -243,11 +243,24 @@ int SUNMatScaleAddI_PSBLAS(realtype c, SUNMatrix A)
 
 int SUNMatScaleAdd_PSBLAS(realtype c, SUNMatrix A, SUNMatrix B)
 {
-  /* matrix should be in the ASSEMBLED state */
-  if(!psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)))
-    psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
 
-  return(psb_c_dspaxpby(c,SM_PMAT_P(A),ONE,SM_PMAT_P(B),SM_DESCRIPTOR_P(A)));
+	/* matrix should be in the ASSEMBLED state */
+	if(!psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)))
+		psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
+
+	if (A == B){
+		/* If the routine is called with the same matrix argument
+		 	then A = c *A + A = (1+c)*A, so we use scaling routine
+			instead */
+		return(psb_c_dspscal(1.0+c, SM_PMAT_P(A), SM_DESCRIPTOR_P(A)));
+	}else{
+		/* matrix should be in the ASSEMBLED state */
+		if(!psb_c_dis_matasb(SM_PMAT_P(B),SM_DESCRIPTOR_P(B)))
+			psb_c_dspasb(SM_PMAT_P(B),SM_DESCRIPTOR_P(B));
+
+		return(psb_c_dspaxpby(c,SM_PMAT_P(A),ONE,SM_PMAT_P(B),SM_DESCRIPTOR_P(A)));
+	}
+
 }
 
 int SUNMatMatvec_PSBLAS(SUNMatrix A, N_Vector x, N_Vector y)
