@@ -271,7 +271,7 @@ int SUNMatMatvec_PSBLAS(SUNMatrix A, N_Vector x, N_Vector y)
 		psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
 
   return(psb_c_dspmm( (psb_d_t) 1.0, SM_PMAT_P(A), NV_PVEC_P(x) ,
-  		    (psb_d_t) 1.0, NV_PVEC_P(y) , NV_DESCRIPTOR_P(x)));
+  		    (psb_d_t) 0.0, NV_PVEC_P(y) , SM_DESCRIPTOR_P(A)));
 }
 
 int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw){
