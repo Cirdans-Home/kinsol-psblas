@@ -225,28 +225,37 @@ int SUNMatZero_PSBLAS(SUNMatrix A)
 
 int SUNMatCopy_PSBLAS(SUNMatrix A, SUNMatrix B)
 {
-  psb_c_dcopy_mat(SM_PMAT_P(A),SM_PMAT_P(B),SM_DESCRIPTOR_P(A));
+  /* matrix should be in the ASSEMBLED state */
+	if(!psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)))
+		psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
 
-  if(psb_c_dis_matasb(SM_PMAT_P(B),SM_DESCRIPTOR_P(A))){
-    return(0);
-  }else{
-    return(psb_c_dspasb(SM_PMAT_P(B),SM_DESCRIPTOR_P(B)));
-  }
-
+  return(psb_c_dcopy_mat(SM_PMAT_P(A),SM_PMAT_P(B),SM_DESCRIPTOR_P(A)));
 }
 
 int SUNMatScaleAddI_PSBLAS(realtype c, SUNMatrix A)
 {
+  /* matrix should be in the ASSEMBLED state */
+  if(!psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)))
+    psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
+
   return(psb_c_dspscalpid(c,SM_PMAT_P(A),SM_DESCRIPTOR_P(A)));
 }
 
 int SUNMatScaleAdd_PSBLAS(realtype c, SUNMatrix A, SUNMatrix B)
 {
+  /* matrix should be in the ASSEMBLED state */
+  if(!psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)))
+    psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
+
   return(psb_c_dspaxpby(c,SM_PMAT_P(A),ONE,SM_PMAT_P(B),SM_DESCRIPTOR_P(A)));
 }
 
 int SUNMatMatvec_PSBLAS(SUNMatrix A, N_Vector x, N_Vector y)
 {
+
+  /* matrix should be in the ASSEMBLED state */
+	if(!psb_c_dis_matasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A)))
+		psb_c_dspasb(SM_PMAT_P(A),SM_DESCRIPTOR_P(A));
 
   return(psb_c_dspmm( (psb_d_t) 1.0, SM_PMAT_P(A), NV_PVEC_P(x) ,
   		    (psb_d_t) 1.0, NV_PVEC_P(y) , NV_DESCRIPTOR_P(x)));
