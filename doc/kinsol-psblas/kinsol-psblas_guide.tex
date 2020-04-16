@@ -114,11 +114,11 @@ psb_c_info(ictxt,&iam,&np);
 	
 \noindent\rule{\columnwidth}{0.4pt}
 We consider as example the finite difference discretization of the following boundary value problem
-\begin{equation*}
-	- \frac{b_1 \partial^2 u}{\partial x^2} - \frac{b_2 \partial^2 u}{\partial y^2} + \frac{a_1 \partial u}{\partial x} + \frac{a_2 \partial u}{\partial y} + a_3 u = 0, \qquad (x,y,z) \in [0,1]^3,
-\end{equation*}
-with Dirichlet boundary conditions, on a uniform grid with \lstinline[style=CStyle]|idim| node per size. All the allocation procedure can be expressed as
-\begin{lstlisting}[style=CStyle]
+\begin{equation}\label{eq:boundaryproblem}
+	- \frac{b_1 \partial^2 u}{\partial x^2} - \frac{b_2 \partial^2 u}{\partial y^2} - \frac{b_3 \partial^2 u}{\partial z^2} + \frac{a_1 \partial u}{\partial x} + \frac{a_2 \partial u}{\partial y} + a_3 \frac{a_3 \partial u}{\partial z} = 0, 
+\end{equation}
+for $(x,y,z) \in [0,1]^3$, with Dirichlet boundary conditions, on a uniform grid with \lstinline[style=CStyle]|idim| node per size. All the allocation procedure can be expressed as
+\begin{lstlisting}[style=CStyle,caption="Example of allocation procedure for a 3D block data distribution",label=lst:example_of_allocation]
 psb_c_descriptor *cdh;
 psb_i_t idim,nb,nlr, nl;
 psb_l_t i,ng, *vl, k;
@@ -139,6 +139,7 @@ if ((vl=malloc(nb*sizeof(psb_l_t)))==NULL) {
 i = ((psb_l_t)iam) * nb;
 for (k=0; k<nl; k++)
 	vl[k] = i+k; 
+psb_c_cdall_vl(nl,vl,ictxt,cdh);
 \end{lstlisting}
 \noindent\rule{\columnwidth}{0.4pt}	
 
@@ -185,7 +186,15 @@ struct _N_VectorContent_PSBLAS {
 
 \subsection{NVECTOR\_PSBLAS functions}
 
-The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the vectors operations listed in Tables~6.2, 6.3, and 6.4 of the original KINSOL library~\cite{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed in Tables~6.2, 6.3, and 6.4 by appending the suffix \texttt{\_PSBLAS}. The NVECTOR\_PSBLAS implementation provides the following additional user--callable routines.
+The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the vectors operations listed in Tables~6.2, 6.3, and 6.4 of the original KINSOL library~\cite{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed in Tables~6.2, 6.3, and 6.4 by appending the suffix \texttt{\_PSBLAS}. The NVECTOR\_PSBLAS implementation provides the following additional user--callable routine:
+
+\begin{description}
+	\item[\fbox{\texttt{N\_VAsb\_PSBLAS}}] This routine assemble the NVector after that all the elements have been inserted into it, i.e., after that all the calls to the \texttt{N\_VMake\_PSBLAS} routine have been completed. This is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dgeasb|.
+
+	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VAsb_PSBLAS(N_Vector v)|
+\end{description}
+
+\subsubsection{Description of the NVECTOR\_PSBLAS functions}
 
 \begin{description}
 	\item[\fbox{\texttt{N\_VNew\_PSBLAS}}] This function creates and allocates memory for a parallel vector
@@ -204,10 +213,6 @@ The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the ve
 	The PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh| are the one defined for the whole programs, the integer \lstinline[style=CStyle]{m} is the number of rows in \lstinline[style=CStyle]{val[]} to be inserted, the array of integers \lstinline[style=CStyle]{irow} is the indices of the rows to be inserted. Specifically, row \lstinline[style=CStyle]|i| of \lstinline[style=CStyle]|val| will be inserted into the local row corresponding to the global index row index \lstinline[style=CStyle]|row[i]|.
 	
 	\attention This routine does not assemble the final vector. After the insertion of all the elements has been completed then the vector should be assembled by means of the \texttt{N\_VAsb\_PSBLAS} routine.
-	
-	\item[\fbox{\texttt{N\_VAsb\_PSBLAS}}] This routine assemble the NVector after that all the elements have been inserted into it, i.e., after that all the calls to the \texttt{N\_VMake\_PSBLAS} routine have been completed. This is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dgeasb|.
-	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|void N_VAsb_PSBLAS(N_Vector v)|
 	
 	\item[\fbox{\texttt{N\_VCloneVectorArray\_PSBLAS}}] This function creates an array of new parallel vectors (by cloning) an array of \lstinline[style=CStyle]|count| parallel vectors \lstinline[style=CStyle]|v|.
 	
@@ -444,9 +449,250 @@ int N_VEnableLinearCombinationVectorArray_PSBLAS(N_Vector v,booleantype tf);
 
 \section{The SUNMATRIX\_PSBLAS implementation}\label{sec:sunmatrix}
 
+The SUNMATRIX\_PSBLAS implementation of the SUNDIALS SUNMATRIX module provides an interface to the PSBLAS code for handling distributed sparse matrices. 
+It defines the \emph{content} field of \texttt{SUNMATRIX} to be a structure containing the PSBLAS descriptor for the data distribution, a PSBLAS sparse matrix object of double, and the PSBLAS communicator (context).
+
+\begin{lstlisting}[style=CStyle]
+struct _SUNMatrixContent_PSBLAS {
+ psb_c_descriptor *cdh;       /* descriptor for data distribution */
+ psb_c_dspmat  *ah;           /* PSBLAS sparse matrix             */
+ int ictxt;                   /* PSBLAS communicator              */
+};
+\end{lstlisting}
+
+\attention All the matrices that have to interact needs to be instantiated on the same parallel context \lstinline[style=CStyle]|ictxt|, and on the same data distribution \lstinline[style=CStyle]|cdh|, and this holds also for the vectors for the mixed type operation.
+
+
+The header file to include when using this module is \texttt{sunmatrix\_psblas.h}. The installed module library to link to is \texttt{libsundials\_sunmatrixpsblas.a} where \texttt{.lib} is typically \texttt{.so} for shared libraries and \texttt{.a} for static libraries.
+
+\subsection{SUNMATRIX\_PSBLAS accessor macros}
+
+The following macros are provided to access the content of a SUNMATRIX\_PSBLAS matrix. The suffix \texttt{\_P} in the names denotes the fact that the data are in distributed memory.
+
+\begin{lstlisting}[style=CStyle]
+#define SM_CONTENT_P(A)     ( (SUNMatrixContent_PSBLAS)(A->content) )
+#define SM_DESCRIPTOR_P(A)  ( SM_CONTENT_P(A)->cdh )
+#define SM_PMAT_P(A)        ( SM_CONTENT_P(A)->ah )
+#define SM_ICTXT_P(A)       ( SM_CONTENT_P(A)->ictxt )
+\end{lstlisting}
+
+\marginlabel{\lstinline[style=CStyle]|SM_CONTENT_P(A)|} this macro gives access to the contents of the PSBLAS matrix \texttt{SUNMATRIX}.
+
+\marginlabel{\lstinline[style=CStyle]|SM_DESCRIPTOR_P(A),SM_PMAT_P(A)|} these macros give instead individual access to the parts of the content of a PSBLAS parallel \texttt{SUNMATRIX}.
+
+\marginlabel{\lstinline[style=CStyle]|SM_CONTENT_P(A)|} this macro provides the PSBLAS context used by the SUNMATRIX\_PSBLAS sparse matrices.
+
+In PSBLAS every sparse matrix has an associated state, which can take one of the following
+values:
+\begin{description}
+\item[BUILD] is the state entered after the first allocation, and before the first assembly; in
+this state it is possible to add nonzero entries.
+\item[ASSEMBLED] is the state entered after the assembly; computations using the sparse
+matrix, such as matrix-vector products, are only possible in this state;
+\item[UPDATE] state entered after a reinitalization; this is used to handle applications
+in which the same sparsity pattern is used multiple times with different
+coefficients. \attention In this state \textit{it is only possible to enter coefficients for already
+existing nonzero entries}.
+\end{description}
+
+\subsection{SUNMATRIX\_PSBLAS functions}
+
+The SUNMATRIX\_PSBLAS implementation provides PSBLAS implementations of all the sparse matrix operations listed in Table~7.2 of the original KINSOL library~\cite{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed in Table~7.2 by appending the suffix \texttt{\_PSBLAS}. The SUNMATRIX\_PSBLAS implementation provides the following additional user--callable routines
+
+\begin{description}
+	\item[\fbox{\texttt{SUNMatAsb\_PSBLAS}}] This routine assemble the SUNMATRIX after that all the elements have been inserted into it, i.e., after that all the calls to the \texttt{SUNMatIns\_PSBLAS} routine have been completed. This is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dspasb|.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatAsb_PSBLAS(SUNMatrix A);|
+	
+	\item[\fbox{\texttt{SUNMatIns\_PSBLAS}}] This routine inserts a set of coefficients into a sparse matrix. On entry to this routine the descriptor may be in either the BUILD or ASSEMBLED state, while the sparse matrix may be in either the BUILD or UPDATE state. We stress that it mandatory that if the descriptor is in the BUILD state, then also the sparse matrix \textit{must} be in
+	the BUILD state, since adding entries to the matrix causes internal calls altering the structure of the communication pattern for the distributed object. The insert of the element in the matrix si assumed to be in the COO format, thus the coefficients to be inserted are represented by the ordered triples \lstinline[style=CStyle]|irw[i]|, \lstinline[style=CStyle]|icl[i]|, \lstinline[style=CStyle]|val[i]|, for $i = 1,\ldots,\lstinline[style=CStyle]|nz|$; these triples should belong to the current process, i.e., the index \lstinline[style=CStyle]|irw[i]| should be one of the local indices, but are otherwise arbitrary, it this is not the case any coefficients from matrix rows not owned by the calling process are
+	silently ignored.
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatIns_PSBLAS(psb_i_t nz, const psb_l_t *irw, const psb_l_t *icl, const psb_d_t *val,SUNMatrix A);|
+\end{description}
+
+\subsubsection{Description of the SUNMATRIX\_PSBLAS functions}
+
+\begin{description}
+\item[\fbox{\texttt{SUNPSBLASMatrix}}] Define and implement user-callable constructor routines to create a
+SUNMatrix on the PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh|, and with the content field and ops pointing to the matrix operations defined in the following. The matrix is initialized in the BUILD state.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)|
+
+\item[\fbox{\texttt{SUNPSBLASMatrix\_Print}}] This function prints the content of a dense SUNMatrix in MatrixMarket format to file specified by \texttt{filename}, the routine takes care of creating/opening the file, a separated one for each process in which the local part (without any eventual overlap) is printed.
+ 
+\marginlabel{Prototype} \lstinline[style=CStyle]|void SUNPSBLASMatrix_Print(SUNMatrix A,char *matrixtitle,char *filename)|
+
+\item[\fbox{\texttt{SUNPSBLASMatrix\_Rows}}] This function returns the number of (global) rows in the PSBLAS SUNMatrix.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|sunindextype SUNPSBLASMatrix_Rows(SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNPSBLASMatrix\_Columns}}] This function returns the number of (global) columns in the PSBLAS SUNMatrix.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|sunindextype SUNPSBLASMatrix_Columns(SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNPSBLASMatrix\_NNZ}}] This function returns the (global) number of non-zero entries in the PSBLAS SUNMatrix.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|sunindextype SUNPSBLASMatrix_NNZ(SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNMatGetID\_PSBLAS}}] Returns the type identifier for the matrix \texttt{A}, since this is a custom implementation it returns the value \texttt{SUNMATRIX\_CUSTOM}.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|SUNMatrix_ID SUNMatGetID_PSBLAS(SUNMatrix A)| 
+
+\item[\fbox{\texttt{SUNMatClone\_PSBLAS}}] Creates a new SUNMatrix on the same descriptor of an existing matrix \texttt{A} and sets
+the \texttt{ops} field. It \textbf{does not copy} the matrix, but rather allocates storage for the new matrix leaving the new matrix in the BUILD state.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|SUNMatrix SUNMatClone_PSBLAS(SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNMatDestroy\_PSBLAS}}] Destroys the SUNMatrix \texttt{A} and frees memory allocated for its internal data. This routine \textbf{does not free} the communicator, in general there are many objects insisting on the same communicator, therefore it should be destroyed/freed on its own.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|void SUNMatDestroy_PSBLAS(SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNMatZero\_PSBLAS}}] Performs the operation $(A)_{i,j} = 0$ for all entries of the matrix \texttt{A}. The return value is an integer flag denoting success/failure of the operation. The PSBLAS at the end of this operation is left in the UPDATE state.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatZero_PSBLAS(SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNMatCopy\_PSBLAS}}] Performs the operation $(B)_{i,j} = (A)_{ i,j}$ for all entries of the matrices \texttt{A} and \texttt{B}. The return value is an integer flag denoting success/failure of the operation. The matrix \texttt{B} inherits the state of the matrix \texttt{A}.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatCopy_PSBLAS(SUNMatrix A, SUNMatrix B)|
+
+\item[\fbox{\texttt{SUNMatScaleAdd\_PSBLAS}}] Performs the operation $A = cA + B$. The return value is an integer flag denoting success/failure of the operation. This function assumes that both the matrices are defined on the same communicator.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatScaleAdd_PSBLAS(realtype c, SUNMatrix A, SUNMatrix B)|
+
+\item[\fbox{\texttt{SUNMatScaleAddI\_PSBLAS}}] Performs the operation $A = cA + I$. The return value is an integer flag denoting success/failure of the operation. 
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatScaleAddI_PSBLAS(realtype c, SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNMatMatvec\_PSBLAS}}] Performs the matrix-vector product operation, $\mathbf{y} = A\mathbf{x}$. It should only be
+called with vectors $\mathbf{x}$ and $\mathbf{y}$ that are compatible with the matrix $A$, i.e., they should be both defined on the same communicator and have the same dimensions. The return value is an integer flag denoting
+success/failure of the operation.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatMatvec_PSBLAS(SUNMatrix A, N_Vector x, N_Vector y)|
+
+\item[\fbox{\texttt{SUNMatSpace\_PSBLAS}}] This function is advisory only, for use in determining a user's total space requirements, for this module it is a dummy function always returning true.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw)|
+\end{description}
+
+\subsubsection{An example of matrix assembly}
+
+As an example of usage of this matrix routines we consider the same boundary value problem in~\eqref{eq:boundaryproblem}, to build the matrix $A$ associated to the centered finite difference discretization
+\begin{equation}
+	\ldots
+\end{equation}
+To this end we use the same communicator \texttt{cdh} and context \texttt{ictxt} we have allocated in Listing~\ref{lst:example_of_allocation}, by simply doing:
+\begin{lstlisting}[style=CStyle]
+A = SUNPSBLASMatrix(ictxt, cdh);
+matgen(ictxt, nl, idim, vl,A);
+psb_c_cdasb(cdh);
+SUNMatAsb_PSBLAS(A);
+\end{lstlisting}
+We have firs initialized the sparse PSBLAS matrix inside the SUNMATRIX container, then by using the \texttt{matgen} allocation routine in Listing~\ref{lst:allocationroutine} we have populate the sparse matrix, and finally assembled both the descriptor, and the sparse matrix.
+
+The complete example can be found in \texttt{examples/sunmatrix/psblas}.
+
 \section{The SUNLINSOL\_PSBLAS implementation}\label{sec:sunlinsol}
 
 \subsection{Algebraic Multigrid Preconditioners}
+
+\appendix
+
+\section{Matrix assembly routine}
+The following routine loops through the local entries of the communicator allocate in Listing~\ref{lst:example_of_allocation}, and uses the \texttt{SUNMatIns\_PSBLAS} routine to insert the entries in the sparse matrix. The auxiliary functions $\{a_{i},b_i,g\}_{i=1}^3$ take care of the coefficient functions in~\eqref{eq:boundaryproblem}.
+\begin{lstlisting}[style=CStyle,caption="Allocation routine for the discrete boundary value problem~\eqref{eq:boundaryproblem}.",label=lst:allocationroutine]
+psb_i_t matgen(psb_i_t ictxt, psb_i_t nl, psb_i_t idim, psb_l_t vl[],SUNMatrix A)
+{
+psb_i_t iam, np;
+psb_l_t ix, iy, iz, el,glob_row;
+psb_i_t i, k, info;
+double x, y, z, deltah, sqdeltah, deltah2;
+double val[10*NBMAX], zt[NBMAX];
+psb_l_t irow[10*NBMAX], icol[10*NBMAX];
+
+info = 0;
+psb_c_info(ictxt,&iam,&np);
+deltah = (double) 1.0/(idim+1);
+sqdeltah = deltah*deltah;
+deltah2  = 2.0* deltah;
+psb_c_set_index_base(0);
+for (i=0; i<nl;  i++) {
+glob_row=vl[i];
+el=0;
+ix = glob_row/(idim*idim);
+iy = (glob_row-ix*idim*idim)/idim;
+iz = glob_row-ix*idim*idim-iy*idim;
+x=(ix+1)*deltah;
+y=(iy+1)*deltah;
+z=(iz+1)*deltah;
+zt[0] = 0.0;
+/*  internal point: build discretization */
+/*  term depending on   (x-1,y,z)        */
+val[el] = -a1(x,y,z)/sqdeltah-b1(x,y,z)/deltah2;
+if (ix==0) {
+zt[0] += g(0.0,y,z)*(-val[el]);
+} else {
+icol[el]=(ix-1)*idim*idim+(iy)*idim+(iz);
+el=el+1;
+}
+/*  term depending on     (x,y-1,z) */
+val[el]  = -a2(x,y,z)/sqdeltah-b2(x,y,z)/deltah2;
+if (iy==0) {
+zt[0] += g(x,0.0,z)*(-val[el]);
+} else {
+icol[el]=(ix)*idim*idim+(iy-1)*idim+(iz);
+el=el+1;
+}
+/* term depending on     (x,y,z-1)*/
+val[el]=-a3(x,y,z)/sqdeltah-b3(x,y,z)/deltah2;
+if (iz==0) {
+zt[0] += g(x,y,0.0)*(-val[el]);
+} else {
+icol[el]=(ix)*idim*idim+(iy)*idim+(iz-1);
+el=el+1;
+}
+/* term depending on     (x,y,z)*/
+val[el]=2.0*(a1(x,y,z)+a2(x,y,z)+a3(x,y,z))/sqdeltah + c(x,y,z);
+icol[el]=(ix)*idim*idim+(iy)*idim+(iz);
+el=el+1;
+/*  term depending on     (x,y,z+1) */
+val[el] = -a3(x,y,z)/sqdeltah+b3(x,y,z)/deltah2;
+if (iz==idim-1) {
+zt[0] += g(x,y,1.0)*(-val[el]);
+} else {
+icol[el]=(ix)*idim*idim+(iy)*idim+(iz+1);
+el=el+1;
+}
+/* term depending on     (x,y+1,z) */
+val[el] = -a2(x,y,z)/sqdeltah+b2(x,y,z)/deltah2;
+if (iy==idim-1) {
+zt[0] += g(x,1.0,z)*(-val[el]);
+} else {
+icol[el]=(ix)*idim*idim+(iy+1)*idim+(iz);
+el=el+1;
+}
+/*  term depending on     (x+1,y,z) */
+val[el] = -a1(x,y,z)/sqdeltah+b1(x,y,z)/deltah2;
+if (ix==idim-1) {
+zt[0] += g(1.0,y,z)*(-val[el]);
+} else {
+icol[el]=(ix+1)*idim*idim+(iy)*idim+(iz);
+el=el+1;
+}
+for (k=0; k<el; k++) irow[k]=glob_row;
+if ((info=SUNMatIns_PSBLAS(el,irow,icol,val,A))!=0)
+fprintf(stderr,"From psb_c_dspins: %d\n",info);
+}
+
+return(info);
+}
+\end{lstlisting}
+
+Observe that to speed-up the insertion procedure we are collecting together a certain number of rows to be inserted, specifically \texttt{10*NBMAX} for a defined value of NBMAX. It is clearly possible to execute one call for
+each nonzero coefficient, however this would have a substantial computational
+overhead. Therefore packing a ``certain amount of data'' (\texttt{10*NBMAX}) into each call
+to the insertion routine is advisable. The best performing value of \texttt{NBMAX} depends on both the architecture of the computer being used and
+on the problem structure.
 
 \printbibliography
 
