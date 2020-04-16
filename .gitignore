@@ -1,6 +1,9 @@
 ## build of the library
 build/
 
+## auxiliary file for converting from make.inc to cmake
+makeincinputcmake
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
@@ -277,4 +280,3 @@ TSWLatexianTemp*
 
 # Makeindex log files
 *.lpz
-

@@ -15,6 +15,13 @@
 
 INSTALL(CODE "MESSAGE(\"\nInstall NVECTOR_PSBLAS\n\")")
 
+# This part will be removed when PSBLAS/MLD2P4 and the other libraries will be
+# installed by using CMake, this works as a patch for including the information
+# contained in the Make.inc files (Compile flags etc.), I know it is very
+# horrible indeed
+EXECUTE_PROCESS(COMMAND ./make2cmakeset.sh ${PSBLAS_INCLUDE_DIR} ${sundials_SOURCE_DIR}/src/nvector/psblas WORKING_DIRECTORY ${sundials_SOURCE_DIR}/src/nvector/psblas OUTPUT_QUIET ERROR_QUIET)
+INCLUDE(${sundials_SOURCE_DIR}/src/nvector/psblas/makeincinputcmake)
+
 IF(MPI_C_COMPILER)
   # use MPI wrapper as the compiler
   SET(CMAKE_C_COMPILER ${MPI_C_COMPILER})
@@ -42,16 +49,12 @@ SET(nvecpsblas_HEADERS
 INCLUDE_DIRECTORIES(.)
 
 # Define C preprocessor flag -DBUILD_SUNDIALS_LIBRARY
-ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
-  -fPIC -DHAVE_AMD
-  -DHAVE_METIS -DHAVE_LAPACK
-  -DHAVE_FINAL -DHAVE_ISO_FORTRAN_ENV
-  -DHAVE_FLUSH_STMT -DHAVE_VOLATILE
-  -DLPK8 -DIPK4 -DMPI_MOD -DPtr64Bits -DLowerUnderscore )
+ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY ${PSBCDEFINES})
+
 
 # PSBLAS LINK DIRECTORIES
 LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
-LINK_LIBRARIES(-lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl -lpthread -llapack -lf77blas -lcblas -latlas -lmetis)
+LINK_LIBRARIES(${PSBLDLIBS} ${PSBLAS_LIBS})
 
 # Rules for building and installing the static library:
 #  - Add the build target for the nvecpsblas library
