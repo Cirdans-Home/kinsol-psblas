@@ -15,16 +15,19 @@
 
 INSTALL(CODE "MESSAGE(\"\nInstall SUNLINSOL_PSBLAS\n\")")
 
-# Add F90 module if F2003 interface is enabled
-IF(F90_FOUND AND F2003_INTERFACE_ENABLE)
-  ADD_SUBDIRECTORY(F90)
-ENDIF(F90_FOUND AND F2003_INTERFACE_ENABLE)
+IF(MPI_C_COMPILER)
+  # use MPI wrapper as the compiler
+  SET(CMAKE_C_COMPILER ${MPI_C_COMPILER})
+ELSE()
+  # add MPI_INCLUDE_PATH to include directories
+  INCLUDE_DIRECTORIES(${MPI_INCLUDE_PATH})
+ENDIF()
 
-# Add variable sunlinsolpsblasfcg_SOURCES with the sources for the SUNLINSOLPSBLASFCG lib
-SET(sunlinsolpsblasfcg_SOURCES sunlinsol_psblas.c)
+# Add variable sunlinsolpsblas_SOURCES with the sources for the SUNLINSOLPSBLASFCG lib
+SET(sunlinsolpsblas_SOURCES sunlinsol_psblas.c)
 
 # Add variable shared_SOURCES with the common SUNDIALS sources which will
-# also be included in the SUNLINSOLPCG library
+# also be included in the SUNLINSOL_PSBLAS library
 SET(shared_SOURCES
   ${sundials_SOURCE_DIR}/src/sundials/sundials_math.c
   ${sundials_SOURCE_DIR}/src/sundials/sundials_nvector.c
@@ -32,7 +35,7 @@ SET(shared_SOURCES
   ${sundials_SOURCE_DIR}/src/sundials/sundials_iterative.c
   )
 
-# Add variable sunlinsolpcg_HEADERS with the exported SUNLINSOLPCG header files
+# Add variable sunlinsolpcg_HEADERS with the exported SUNLINSOL_PSBLAS header files
 SET(sunlinsolpcg_HEADERS
   ${sundials_SOURCE_DIR}/include/sunlinsol/sunlinsol_psblas.h
   )
@@ -45,44 +48,49 @@ INCLUDE_DIRECTORIES(${PSBLAS_EXT_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${MLD2P4_EXT_INCLUDE_DIR})
 
 # Define C preprocessor flag -DBUILD_SUNDIALS_LIBRARY
-ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY)
-ADD_DEFINITIONS(-DIPK4) 
-ADD_DEFINITIONS(-DLPK8)
-ADD_DEFINITIONS(-DLowerUnderscore)
-ADD_DEFINITIONS(-DPtr64Bits)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DIPK4 -DLPK8 -DLowerUnderscore -DPtr64Bits")
+ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
+  -fPIC -DHAVE_AMD
+  -DHAVE_METIS -DHAVE_LAPACK
+  -DHAVE_FINAL -DHAVE_ISO_FORTRAN_ENV
+  -DHAVE_FLUSH_STMT -DHAVE_VOLATILE
+  -DLPK8 -DIPK4 -DMPI_MOD -DPtr64Bits -DLowerUnderscore )
+
+# PSBLAS LINK DIRECTORIES
+LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
+LINK_LIBRARIES(-lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl -lpthread -llapack -lf77blas -lcblas -latlas -lmetis)
+
 
 # Rules for building and installing the static library:
-#  - Add the build target for the SUNLINSOLPCG library
+#  - Add the build target for the SUNLINSOL_PSBLAS library
 #  - Set the library name and make sure it is not deleted
-#  - Install the SUNLINSOLPCG library
+#  - Install the SUNLINSOL_PSBLAS library
 IF(BUILD_STATIC_LIBS)
-  ADD_LIBRARY(sundials_sunlinsolpsblasfcg_static STATIC ${sunlinsolpsblasfcg_SOURCES} ${shared_SOURCES})
-  SET_TARGET_PROPERTIES(sundials_sunlinsolpsblasfcg_static
-    PROPERTIES OUTPUT_NAME sundials_sunlinsolpsblasfcg CLEAN_DIRECT_OUTPUT 1)
-  INSTALL(TARGETS sundials_sunlinsolpsblasfcg_static DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  ADD_LIBRARY(sundials_sunlinsolpsblas_static STATIC ${sunlinsolpsblas_SOURCES} ${shared_SOURCES})
+  SET_TARGET_PROPERTIES(sundials_sunlinsolpsblas_static
+    PROPERTIES OUTPUT_NAME sundials_sunlinsolpsblas CLEAN_DIRECT_OUTPUT 1)
+  INSTALL(TARGETS sundials_sunlinsolpsblas_static DESTINATION ${CMAKE_INSTALL_LIBDIR})
 ENDIF(BUILD_STATIC_LIBS)
 
 # Rules for building and installing the shared library:
-#  - Add the build target for the SUNLINSOLPCG library
+#  - Add the build target for the SUNLINSOL_PSBLAS library
 #  - Set the library name and make sure it is not deleted
 #  - Set VERSION and SOVERSION for shared libraries
-#  - Install the SUNLINSOLPCG library
+#  - Install the SUNLINSOL_PSBLAS library
 IF(BUILD_SHARED_LIBS)
-  ADD_LIBRARY(sundials_sunlinsolpsblasfcg_shared SHARED ${sunlinsolpsblasfcg_SOURCES} ${shared_SOURCES})
+  ADD_LIBRARY(sundials_sunlinsolpsblas_shared SHARED ${sunlinsolpsblas_SOURCES} ${shared_SOURCES})
 
   IF(UNIX)
-    TARGET_LINK_LIBRARIES(sundials_sunlinsolpsblasfcg_shared m)
+    TARGET_LINK_LIBRARIES(sundials_sunlinsolpsblas_shared m)
   ENDIF()
 
-  SET_TARGET_PROPERTIES(sundials_sunlinsolpsblasfcg_shared
+  SET_TARGET_PROPERTIES(sundials_sunlinsolpsblas_shared
     PROPERTIES OUTPUT_NAME sundials_sunlinsolpcg CLEAN_DIRECT_OUTPUT 1)
-  SET_TARGET_PROPERTIES(sundials_sunlinsolpsblasfcg_shared
+  SET_TARGET_PROPERTIES(sundials_sunlinsolpsblas_shared
     PROPERTIES VERSION ${sunlinsollib_VERSION} SOVERSION ${sunlinsollib_SOVERSION})
-  INSTALL(TARGETS sundials_sunlinsolpsblasfcg_shared DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  INSTALL(TARGETS sundials_sunlinsolpsblas_shared DESTINATION ${CMAKE_INSTALL_LIBDIR})
 ENDIF(BUILD_SHARED_LIBS)
 
-# Install the SUNLINSOLPCG header files
+# Install the SUNLINSOL_PSBLAS header files
 INSTALL(FILES ${sunlinsolpcg_HEADERS} DESTINATION include/sunlinsol)
 
 #
