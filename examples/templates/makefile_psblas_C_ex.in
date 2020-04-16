@@ -28,7 +28,7 @@ libdir       = @libdir@
 
 include $(prefix)/Make.inc
 PSBC_LIBS= -L$(prefix)/lib -lpsb_cbind
-PSB_LIBS=-lpsb_krylov -lpsb_prec -lpsb_base -L$(prefix)/lib
+PSB_LIBS=-lpsb_krylov -lpsb_prec -lpsb_base -lpsb_util -L$(prefix)/lib
 
 CPP         = @CPP@
 CPPFLAGS    = @CPPFLAGS@

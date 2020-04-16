@@ -104,8 +104,7 @@ SUNMatrix SUNPSBLASMatrix(int ictxt, psb_c_descriptor *cdh)
 
 void SUNPSBLASMatrix_Print(SUNMatrix A, char *matrixtitle, char* filename)
 {
-  // FIXME ERROR ON COMPILATION IN TEST!
-  // psb_c_dmm_mat_write( SM_PMAT_P(A), matrixtitle, filename);
+  psb_c_dmm_mat_write( SM_PMAT_P(A), matrixtitle, filename);
 
   return;
 }
