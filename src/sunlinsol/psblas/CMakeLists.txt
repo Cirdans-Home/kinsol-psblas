@@ -33,19 +33,18 @@ SET(shared_SOURCES
   ${sundials_SOURCE_DIR}/src/sundials/sundials_nvector.c
   ${sundials_SOURCE_DIR}/src/sundials/sundials_linearsolver.c
   ${sundials_SOURCE_DIR}/src/sundials/sundials_iterative.c
-  )
+	${sundials_SOURCE_DIR}/src/sundials/sundials_mpi.c
+	)
 
-# Add variable sunlinsolpcg_HEADERS with the exported SUNLINSOL_PSBLAS header files
-SET(sunlinsolpcg_HEADERS
+# Add variable sunlinsolpsblas_HEADERS with the exported SUNLINSOL_PSBLAS header files
+SET(sunlinsolpsblas_HEADERS
   ${sundials_SOURCE_DIR}/include/sunlinsol/sunlinsol_psblas.h
+	${sundials_SOURCE_DIR}/include/sunmatrix/sunmatrix_psblas.h
+	${sundials_SOURCE_DIR}/include/nvector/nvector_psblas.h
   )
 
 # Add source directory to include directories
 INCLUDE_DIRECTORIES(.)
-INCLUDE_DIRECTORIES(${MLD2P4_INCLUDE_DIR})
-INCLUDE_DIRECTORIES(${PSBLAS_INCLUDE_DIR})
-INCLUDE_DIRECTORIES(${PSBLAS_EXT_INCLUDE_DIR})
-INCLUDE_DIRECTORIES(${MLD2P4_EXT_INCLUDE_DIR})
 
 # Define C preprocessor flag -DBUILD_SUNDIALS_LIBRARY
 ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
@@ -57,7 +56,7 @@ ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
 
 # PSBLAS LINK DIRECTORIES
 LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
-LINK_LIBRARIES(-lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl -lpthread -llapack -lf77blas -lcblas -latlas -lmetis)
+LINK_LIBRARIES(-lmld_cbind  -lmld_prec -lpsb_util -lpsb_krylov -lpsb_prec -lpsb_base -lpsb_cbind -fPIC -ldl -lpthread -llapack -lf77blas -lcblas -latlas -lmetis)
 
 
 # Rules for building and installing the static library:
@@ -84,14 +83,14 @@ IF(BUILD_SHARED_LIBS)
   ENDIF()
 
   SET_TARGET_PROPERTIES(sundials_sunlinsolpsblas_shared
-    PROPERTIES OUTPUT_NAME sundials_sunlinsolpcg CLEAN_DIRECT_OUTPUT 1)
+    PROPERTIES OUTPUT_NAME sundials_sunlinsolpsblas CLEAN_DIRECT_OUTPUT 1)
   SET_TARGET_PROPERTIES(sundials_sunlinsolpsblas_shared
     PROPERTIES VERSION ${sunlinsollib_VERSION} SOVERSION ${sunlinsollib_SOVERSION})
   INSTALL(TARGETS sundials_sunlinsolpsblas_shared DESTINATION ${CMAKE_INSTALL_LIBDIR})
 ENDIF(BUILD_SHARED_LIBS)
 
 # Install the SUNLINSOL_PSBLAS header files
-INSTALL(FILES ${sunlinsolpcg_HEADERS} DESTINATION include/sunlinsol)
+INSTALL(FILES ${sunlinsolpsblas_HEADERS} DESTINATION include/sunlinsol)
 
 #
 MESSAGE(STATUS "Added SUNLINSOL_PSBLAS module")

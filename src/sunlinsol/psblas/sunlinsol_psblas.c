@@ -1,18 +1,36 @@
+/*
+ * -----------------------------------------------------------------
+ * Programmer(s): F. Durastante @ IAC-CNR
+ * Based on sundials_spgmr.c code, written by Scott D. Cohen,
+ *                Alan C. Hindmarsh and Radu Serban @ LLNL
+ * -----------------------------------------------------------------
+ * SUNDIALS Copyright Start
+ * Copyright (c) 2002-2019, Lawrence Livermore National Security
+ * and Southern Methodist University.
+ * All rights reserved.
+ *
+ * See the top-level LICENSE and NOTICE files for details.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SUNDIALS Copyright End
+ * -----------------------------------------------------------------
+ * This is the implementation file for the SPGMR implementation of
+ * the SUNLINSOL package.
+ * -----------------------------------------------------------------
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <sunlinsol/sunlinsol_psblas.h>
 #include <sundials/sundials_math.h>
-
-#include "psb_base_cbind.h"
-#include "psb_prec_cbind.h"
-#include "psb_krylov_cbind.h"
+#include <sundials/sundials_nvector.h>
+#include <sunmatrix/sunmatrix_psblas.h>
+#include <nvector/nvector_psblas.h>
 
 #define ZERO RCONST(0.0)
 #define ONE  RCONST(1.0)
-
-#define PSBLAS_CONTENT(S)  ( (SUNLinearSolverContent_PSBLAS)(S->content) )
 
 #ifdef __cplusplus  /* wrapper to enable C++ usage */
 extern "C" {
@@ -20,7 +38,7 @@ extern "C" {
 
 
 /* Function used to create a PSBLAS linear solver */
-SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[20], char ptype[20]){
+SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[]){
 
   SUNLinearSolver S;
   SUNLinearSolver_Ops ops;
@@ -37,7 +55,6 @@ SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[20], ch
   if (ops == NULL) { free(S); return(NULL); }
 
   /* Attach operations */
-  // TODO:Some of the function that are now set as null needs to be implemented!
   ops->gettype           = SUNLinSolGetType_PSBLAS;
   ops->setatimes         = NULL;
   ops->setpreconditioner = NULL;
@@ -45,25 +62,44 @@ SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[20], ch
   ops->initialize        = SUNLinSolInitialize_PSBLAS;
   ops->setup             = SUNLinSolSetup_PSBLAS;
   ops->solve             = SUNLinSolSolve_PSBLAS;
-  ops->numiters          = NULL;  // TODO
-  ops->resnorm           = NULL;  // TODO
-  ops->resid             = NULL;  // TODO
-  ops->lastflag          = NULL;  // TODO
-  ops->space             = NULL;  // TODO
-  ops->free              = NULL;  // TODO
+  ops->numiters          = SUNLinSolNumIters_PSBLAS;
+  ops->resnorm           = SUNLinSolResNorm_PSBLAS;
+  ops->resid             = NULL;
+  ops->lastflag          = NULL;
+  ops->space             = NULL;
+  ops->free              = SUNLinSolFree_PSBLAS;
 
   /* Create content */
   content = NULL;
   content = (SUNLinearSolverContent_PSBLAS) malloc(sizeof(struct _SUNLinearSolverContent_PSBLAS));
   if (content == NULL) { free(ops); free(S); return(NULL); }
 
-  /* Fill content */
+  /* Fill content:
+  Only the solver options are set at this stage, all the information regarding
+  the communicator, the PSBLAS contex are imported from the matrix when the
+  solver is initialized. The setup of the preconditioner has to be done with
+  the other routine, here we decide only if we are using a PSBLAS or an MLD2P4
+  preconditioner from the type.                                               */
   content->options=options;
-  content->cdh=psb_c_new_descriptor();
-  content->ictxt=psb_c_init();
-  content->ph=psb_c_new_dprec();
-  strcpy(content->methd,methd); // assignment to expression with array type!
-  strcpy(content->ptype,ptype); // assignment to expression with array type!
+  content->cdh=NULL;
+  content->ah=NULL;
+  content->ictxt=-1;
+  strcpy(content->methd,methd);
+  strcpy(content->ptype,ptype);
+  /* We need to decide here between a PSBLAS or an MLD2P4 preconditioner, this
+  depends on the ptype string */
+  if( strcmp(ptype,"NONE") || strcmp(ptype,"BJAC") || strcmp(ptype,"DIAG") ){
+      content->ph=psb_c_new_dprec();
+      content->mh=NULL;
+  }else if( strcmp(ptype,"ML") ){
+      content->ph=NULL;
+      content->mh=mld_c_dprec_new();
+  }else{
+    free(content);
+    free(ops);
+    free(S);
+    return(NULL);
+  }
 
   /* Attach content and ops */
   S->content = content;
@@ -81,38 +117,39 @@ SUNLinearSolver_Type SUNLinSolGetType_PSBLAS(SUNLinearSolver S)
 
 int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
 
-  SUNLinearSolverContent_PSBLAS content;
+  if(S == NULL) return(SUNLS_MEM_NULL);
 
   return(SUNLS_SUCCESS);
 }
 
 int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
   /* In this function we perform all the initialization for the solver and for
-  the preconditioner. We get the matrix SUNMatrix A and covert it into a PSBLAS
-  matrix and we store it into the S structure. Moreover, we use it to setup the
-  preconditioner ph in S. */
-
-  if (S == NULL) return(SUNLS_MEM_NULL);
-
-  psb_c_dspmat *ah;   // PSBLAS matrix will contain the copy of SUNMatrix A
+  the preconditioner. */
   psb_i_t ret;
 
-  // Convert the matrix :
+  if (S == NULL || A == NULL) return(SUNLS_MEM_NULL);
 
-  PSBLAS_CONTENT(S)->ah=ah;
-  // Build the preconditioner
-  psb_c_dprecinit(PSBLAS_CONTENT(S)->ictxt,
-                  PSBLAS_CONTENT(S)->ph,
-                  PSBLAS_CONTENT(S)->ptype);
-  ret=psb_c_dprecbld(ah,PSBLAS_CONTENT(S)->cdh,PSBLAS_CONTENT(S)->ph);
+  // Use the information contained in A to setup the field in S
+  LS_DESCRIPTOR_P(S) = SM_DESCRIPTOR_P(A);
+  LS_PMAT_P(S)       = SM_PMAT_P(A);
+  LS_ICTXT_P(S)      = SM_ICTXT_P(A);
 
-  // check if the construction of the preconditioner has gone well and return
-  if(ret == 0){
-    return(SUNLS_PSET_FAIL_UNREC);
+  // The init routine depends on the fact that we are using PSBLAS or MLD2P4
+  if( strcmp(LS_PTYPE_P(S),"NONE") || strcmp(LS_PTYPE_P(S),"BJAC") || strcmp(LS_PTYPE_P(S),"DIAG") ){
+      ret = psb_c_dprecinit(LS_ICTXT_P(S),LS_PREC_P(S),LS_PTYPE_P(S));
+      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+      ret = psb_c_dprecbld(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_PREC_P(S));
+      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+  }else if( strcmp(LS_PTYPE_P(S),"ML") ){
+      ret = mld_c_dprecinit(LS_ICTXT_P(S), LS_MLPREC_P(S), LS_PTYPE_P(S));
+      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+      ret = mld_c_dhierarchy_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
+      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+      ret = mld_c_dsmoothers_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
+      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
   }
-  else{
-    return(SUNLS_SUCCESS);
-  }
+
+  return(SUNLS_SUCCESS);
 
 
 }
@@ -121,30 +158,83 @@ int SUNLinSolSolve_PSBLAS(SUNLinearSolver S, SUNMatrix A,
                                             N_Vector x, N_Vector b,
                                             realtype tol){
   psb_i_t ret;
-  psb_c_dvector *bh, *xh;
 
   PSBLAS_CONTENT(S)->options.eps = tol;
-  // Convert the N_Vector b to PSBLAS format
-
-  // Convert the N_Vector x to PSBLAS format
-
-  // Solve the linear system in PSBLAS
-  ret=psb_c_dkrylov(PSBLAS_CONTENT(S)->methd,
-                    PSBLAS_CONTENT(S)->ah,
-                    PSBLAS_CONTENT(S)->ph,
-                    bh,xh,
-                    PSBLAS_CONTENT(S)->cdh,&(PSBLAS_CONTENT(S)->options));
-
-
-  if(ret == 0){
-    // Copy back the solution to the N_Vector x
-    // Put the various statistic in PSBLAS_CONTENT(S) for extraction
-    return(SUNLS_SUCCESS);
+  /* Solve the linear system in PSBLAS, again we need to make a distinction
+   * regarding the used preconditioner                                        */
+  if( strcmp(LS_PTYPE_P(S),"NONE") || strcmp(LS_PTYPE_P(S),"BJAC") || strcmp(LS_PTYPE_P(S),"DIAG") ){
+    ret=psb_c_dkrylov(LS_METHD_P(S),
+                    LS_PMAT_P(S),
+                    LS_PREC_P(S),
+                    NV_PVEC_P(b),
+                    NV_PVEC_P(x),
+                    LS_DESCRIPTOR_P(S),
+                    &(PSBLAS_CONTENT(S)->options));
+    if(ret != 0) return(SUNLS_PACKAGE_FAIL_REC);
+  }else if(strcmp(LS_PTYPE_P(S),"ML")){
+    ret=mld_c_dkrylov(LS_METHD_P(S),
+                    LS_PMAT_P(S),
+                    LS_MLPREC_P(S),
+                    NV_PVEC_P(b),
+                    NV_PVEC_P(x),
+                    LS_DESCRIPTOR_P(S),
+                    &(PSBLAS_CONTENT(S)->options));
+    if(ret != 0) return(SUNLS_PACKAGE_FAIL_REC);
   }
-  else{
-    return(SUNLS_PACKAGE_FAIL_REC); // Need more informative output here!
-  }
+
+  return(SUNLS_SUCCESS);
 }
+
+int SUNLinSolFree_PSBLAS(SUNLinearSolver S){
+  /* This routine frees only the preconditioner and the structure containing the
+  various part of the solver: the communicator and the matrix are still there,
+  they should be freed after the matrix has been destroyed */
+
+  if (S == NULL) return(SUNLS_SUCCESS);
+
+  /* delete the preconditioner item from within the content structure */
+  if( strcmp(LS_PTYPE_P(S),"NONE") || strcmp(LS_PTYPE_P(S),"BJAC") || strcmp(LS_PTYPE_P(S),"DIAG") ){
+    psb_c_dprecfree(LS_PREC_P(S));
+  }else if(strcmp(LS_PTYPE_P(S),"ML")){
+    mld_c_dprecfree(LS_MLPREC_P(S));
+  }
+
+  /* delete generic structures */
+  free(S->content);  S->content = NULL;
+  free(S->ops);  S->ops = NULL;
+  free(S); S = NULL;
+  return(SUNLS_SUCCESS);
+}
+
+int SUNLinSolNumIters_PSBLAS(SUNLinearSolver S){
+  if (S == NULL) return(-ONE);
+  return(PSBLAS_CONTENT(S)->options.iter);
+}
+realtype SUNLinSolResNorm_PSBLAS(SUNLinearSolver S){
+  if (S == NULL) return(-ONE);
+  return(PSBLAS_CONTENT(S)->options.err);
+}
+
+/* ---------------------------------------
+ * Interfaces for PSBLAS/MLD2P4 routine for
+ * setting up the preconditioner options in
+ * SUNLinSol_PSBLAS
+ * --------------------------------------- */
+
+int SUNLinSolSeti_PSBLAS(SUNLinearSolver S, const char *what, psb_i_t val){
+  if (S == NULL || LS_MLPREC_P(S) == NULL) return(-1);
+  return(mld_c_dprecseti(LS_MLPREC_P(S), what, val));
+}
+int SUNLinSolSetc_PSBLAS(SUNLinearSolver S, const char *what, const char *val){
+  if (S == NULL || LS_MLPREC_P(S) == NULL) return(-1);
+  return(mld_c_dprecsetc(LS_MLPREC_P(S), what, val));
+}
+int SUNLinSolSetr_PSBLAS(SUNLinearSolver S, const char *what, double val){
+  if (S == NULL || LS_MLPREC_P(S) == NULL) return(-1);
+  return(mld_c_dprecsetr(LS_MLPREC_P(S), what, val));
+}
+
+
 
 
 #ifdef __cplusplus
