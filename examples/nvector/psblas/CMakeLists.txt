@@ -32,6 +32,9 @@ SET(nvector_examples_dependencies
 # Add source directory to include directories
 INCLUDE_DIRECTORIES(. ..)
 
+# Add PSBLAS flag
+INCLUDE(${sundials_SOURCE_DIR}/src/nvector/psblas/makeincinputcmake)
+
 # Specify libraries to link against (through the target that was used to
 # generate them) based on the value of the variable LINK_LIBRARY_TYPE
 IF(LINK_LIBRARY_TYPE MATCHES "static")
@@ -40,21 +43,15 @@ ELSE()
   SET(NVECS_LIB sundials_nvecpsblas_shared)
 ENDIF()
 
-# Set-up linker flags and link libraries
-ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
-  -fPIC -DHAVE_AMD
-  -DHAVE_METIS -DHAVE_LAPACK
-  -DHAVE_FINAL -DHAVE_ISO_FORTRAN_ENV
-  -DHAVE_FLUSH_STMT -DHAVE_VOLATILE
-  -DLPK8 -DIPK4 -DMPI_MOD -DPtr64Bits -DLowerUnderscore )
+SET(SUNDIALS_LIBS ${NVECS_LIB} ${EXTRA_LINK_LIBS})
 
-SET(SUNDIALS_LIBS ${NVECS_LIB} ${EXTRA_LINK_LIBS}
--L${PSBLAS_LIBRARY_DIR} -lpsb_util -lpsb_krylov
--lpsb_prec -lpsb_base -lpsb_cbind -lgfortran -ldl
--pthread -I/usr/lib/x86_64-linux-gnu/openmpi/lib
--L/usr/lib -L/usr/lib/x86_64-linux-gnu/openmpi/lib
--lmpi_usempif08 -lmpi_usempi_ignore_tkr -lmpi_mpifh -lmpi
--llapack -lf77blas -lcblas -latlas -lmetis)
+# Define C preprocessor flag -DBUILD_SUNDIALS_LIBRARY
+ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY ${PSBCDEFINES})
+
+# PSBLAS LINK DIRECTORIES
+LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
+LINK_LIBRARIES(${PSBLDLIBS} ${PSBLAS_LIBS} -lgfortran)
+
 
 INCLUDE_DIRECTORIES(${MPI_INCLUDE_PATH})
 

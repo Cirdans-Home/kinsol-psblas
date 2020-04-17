@@ -34,6 +34,9 @@ SET(sunlinsol_psblas_dependencies
 # Add source directory to include directories
 INCLUDE_DIRECTORIES(. ..)
 
+# Add PSBLAS flag
+INCLUDE(${sundials_SOURCE_DIR}/src/sunlinsol/psblas/makeincinputcmake)
+
 # Specify libraries to link against (through the target that was used to
 # generate them) based on the value of the variable LINK_LIBRARY_TYPE
 IF(LINK_LIBRARY_TYPE MATCHES "static")
@@ -47,51 +50,15 @@ ELSE()
 ENDIF()
 
 # Set-up linker flags and link libraries
-ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
-  -fPIC -DHAVE_AMD
-  -DHAVE_METIS -DHAVE_LAPACK
-  -DHAVE_FINAL -DHAVE_ISO_FORTRAN_ENV
-  -DHAVE_FLUSH_STMT -DHAVE_VOLATILE
-  -DLPK8 -DIPK4 -DMPI_MOD -DPtr64Bits -DLowerUnderscore )
+ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY ${PSBCDEFINES})
 
 # Set-up linker flags and link libraries
-SET(SUNDIALS_LIBS ${NVECS_LIB} ${EXTRA_LINK_LIBS} ${SUNMATS_LIB} ${SUNLINSOL_LIB}
--L${PSBLAS_LIBRARY_DIR}
--lpsb_util
--lpsb_krylov
--lpsb_prec
--lpsb_base
--lpsb_cbind
--lgfortran
--lmld_cbind
--lmld_prec
--ldl
--pthread
--I/usr/lib/x86_64-linux-gnu/openmpi/lib
--L/usr/lib
--L/usr/lib/x86_64-linux-gnu/openmpi/lib
--lmpi_usempif08
--lmpi_usempi_ignore_tkr
--lmpi_mpifh
--lmpi
--llapack
--lf77blas
--lcblas
--latlas
--lmetis
--lsmumps
--ldmumps
--lcmumps
--lzmumps
--lmumps_common
--lpord
--lsuperlu
--lsuperlu_dist
--lumfpack
--lamd
--lmetis
--lparmetis
-)
+SET(SUNDIALS_LIBS ${NVECS_LIB} ${EXTRA_LINK_LIBS} ${SUNMATS_LIB} ${SUNLINSOL_LIB})
+
+# PSBLAS LINK DIRECTORIES
+LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
+LINK_LIBRARIES(${PSBLDLIBS} ${PSBLAS_LIBS} -lgfortran -lmld_cbind -lmld_prec)
+
 
 IF(MPI_C_COMPILER)
   # use MPI wrapper as the compiler

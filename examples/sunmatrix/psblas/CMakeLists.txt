@@ -21,10 +21,7 @@
 SET(sunmatrix_psblas_examples
   "test_sunmatrix_psblas\;400 400 0\;"
   "test_sunmatrix_psblas\;450 450 0\;"
-  "test_sunmatrix_psblas\;200 1000 0\;"
-  "test_sunmatrix_psblas\;6000 350 0\;"
-  "test_sunmatrix_psblas\;500 5000 0\;"
-  "test_sunmatrix_psblas\;4000 800 0\;"
+  "test_sunmatrix_psblas\;1000 1000 0\;"
 )
 
 # Dependencies for sunmatrix examples
@@ -36,6 +33,9 @@ SET(sunmatrix_psblas_dependencies
 
 # Add source directory to include directories
 include_directories(. ..)
+
+# Add PSBLAS flag
+INCLUDE(${sundials_SOURCE_DIR}/src/sunmatrix/psblas/makeincinputcmake)
 
 INCLUDE_DIRECTORIES(${MPI_INCLUDE_PATH})
 
@@ -58,21 +58,14 @@ ELSE()
 ENDIF()
 
 # Set-up linker flags and link libraries
-ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY
-  -fPIC -DHAVE_AMD
-  -DHAVE_METIS -DHAVE_LAPACK
-  -DHAVE_FINAL -DHAVE_ISO_FORTRAN_ENV
-  -DHAVE_FLUSH_STMT -DHAVE_VOLATILE
-  -DLPK8 -DIPK4 -DMPI_MOD -DPtr64Bits -DLowerUnderscore )
+ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY ${PSBCDEFINES})
 
 # Set-up linker flags and link libraries
-SET(SUNDIALS_LIBS ${NVECS_LIB} ${EXTRA_LINK_LIBS} ${SUNMATS_LIB}
--L${PSBLAS_LIBRARY_DIR} -lpsb_util -lpsb_krylov
--lpsb_prec -lpsb_base -lpsb_cbind -lgfortran -ldl
--pthread -I/usr/lib/x86_64-linux-gnu/openmpi/lib
--L/usr/lib -L/usr/lib/x86_64-linux-gnu/openmpi/lib
--lmpi_usempif08 -lmpi_usempi_ignore_tkr -lmpi_mpifh -lmpi
--llapack -lf77blas -lcblas -latlas -lmetis)
+SET(SUNDIALS_LIBS ${NVECS_LIB} ${EXTRA_LINK_LIBS} ${SUNMATS_LIB})
+
+# PSBLAS LINK DIRECTORIES
+LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
+LINK_LIBRARIES(${PSBLDLIBS} ${PSBLAS_LIBS} -lgfortran)
 
 # Add the build and install targets for each example
 FOREACH(example_tuple ${sunmatrix_psblas_examples})

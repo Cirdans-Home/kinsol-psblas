@@ -19,8 +19,8 @@ INSTALL(CODE "MESSAGE(\"\nInstall SUNLINSOL_PSBLAS\n\")")
 # installed by using CMake, this works as a patch for including the information
 # contained in the Make.inc files (Compile flags etc.), I know it is very
 # horrible indeed
-EXECUTE_PROCESS(COMMAND ./make2cmakeset.sh ${PSBLAS_INCLUDE_DIR} ${sundials_SOURCE_DIR}/src/nvector/psblas WORKING_DIRECTORY ${sundials_SOURCE_DIR}/src/nvector/psblas OUTPUT_QUIET ERROR_QUIET)
-INCLUDE(${sundials_SOURCE_DIR}/src/nvector/psblas/makeincinputcmake)
+EXECUTE_PROCESS(COMMAND ./make2cmakeset.sh ${PSBLAS_INCLUDE_DIR} ${sundials_SOURCE_DIR}/src/sunlinsol/psblas WORKING_DIRECTORY ${sundials_SOURCE_DIR}/src/sunlinsol/psblas OUTPUT_QUIET ERROR_QUIET)
+INCLUDE(${sundials_SOURCE_DIR}/src/sunlinsol/psblas/makeincinputcmake)
 
 
 IF(MPI_C_COMPILER)
@@ -59,7 +59,7 @@ ADD_DEFINITIONS(-DBUILD_SUNDIALS_LIBRARY ${PSBCDEFINES})
 
 # PSBLAS LINK DIRECTORIES
 LINK_DIRECTORIES(${PSBLAS_LIBRARY_DIR})
-LINK_LIBRARIES(${PSBLDLIBS} ${PSBLAS_LIBS})
+LINK_LIBRARIES(${PSBLDLIBS} ${PSBLAS_LIBS} -lgfortran -lmld_cbind -lmld_prec)
 
 # Rules for building and installing the static library:
 #  - Add the build target for the SUNLINSOL_PSBLAS library
