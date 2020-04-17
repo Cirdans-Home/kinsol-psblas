@@ -27,15 +27,17 @@ includedir   = @includedir@
 libdir       = @libdir@
 
 include $(prefix)/Make.inc
+include $(prefix)/include/Make.inc.mld2p4
 PSBC_LIBS= -L$(prefix)/lib -lpsb_cbind
 PSB_LIBS=-lpsb_krylov -lpsb_prec -lpsb_base -lpsb_util -L$(prefix)/lib
+MLD_LIBS=-lmld_prec -lmld_cbind $(MUMPSLIBS) $(SLULIBS) $(UMFLIBS) $(EXTRALIBS)
 
 CPP         = @CPP@
 CPPFLAGS    = @CPPFLAGS@
 CC          = @CC@
-CFLAGS      = @CFLAGS@ $(PSBCDEFINES)
-LDFLAGS     = @LDFLAGS@ $(PSBC_LIBS) $(PSB_LIBS) $(LAPACK) $(BLAS) $(METIS_LIB) $(AMD_LIB) -lm -lgfortran
-LIBS        = @LIBS@ $(PSBC_LIBS) $(PSB_LIBS) $(LAPACK) $(BLAS) $(METIS_LIB) $(AMD_LIB) -lm -lgfortran
+CFLAGS      = @CFLAGS@ $(PSBCDEFINES) $(MUMPSFLAGS) $(SLUFLAGS) $(UMFFLAGS) $(MLDFDEFINES)
+LDFLAGS     = @LDFLAGS@ $(PSBC_LIBS) $(PSB_LIBS) $(LAPACK) $(BLAS) $(METIS_LIB) $(AMD_LIB) $(MLD_LIBS) -lm -lgfortran
+LIBS        = @LIBS@ $(PSBC_LIBS) $(PSB_LIBS) $(LAPACK) $(BLAS) $(METIS_LIB) $(AMD_LIB) $(MLD_LIBS) -lm -lgfortran
 
 LINKFLAGS = -Wl,-rpath,@libdir@
 
@@ -48,7 +50,7 @@ MPI_FLAGS   = @MPI_FLAGS@
 
 TMP_INCS  = ${includedir} ${MPI_INC_DIR} $(CINCLUDES) $(FINCLUDES)
 INCLUDES  = $(addprefix -I, ${TMP_INCS})
-LIBRARIES = -l@SOLVER_LIB@ -lsundials_nvecpsblas ${LIBS}
+LIBRARIES = -l@SOLVER_LIB@ -lsundials_nvecpsblas -lsundials_sunmatrixpsblas ${LIBS}
 
 EXAMPLES = @EXAMPLES@
 EXAMPLES_DEPENDENCIES = @EXAMPLES_DEPENDENCIES@

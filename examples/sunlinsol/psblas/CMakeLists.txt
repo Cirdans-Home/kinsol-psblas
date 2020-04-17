@@ -125,10 +125,12 @@ FOREACH(example_tuple ${sunlinsol_psblas_examples})
   # install example source files
   IF(EXAMPLES_INSTALL)
     INSTALL(FILES ${example}.c
+      mlde.inp
       ../test_sunlinsol.h
       ../test_sunlinsol.c
       ../../../src/sundials/sundials_linearsolver.c
       ../../../src/sundials/sundials_nvector.c
+      ../../../src/sundials/sundials_matrix.c
       DESTINATION ${EXAMPLES_INSTALL_PATH}/sunlinsol/psblas)
   ENDIF()
 
