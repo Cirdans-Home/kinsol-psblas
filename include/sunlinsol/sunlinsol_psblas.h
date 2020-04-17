@@ -104,7 +104,7 @@ SUNDIALS_EXPORT int SUNLinSolSetr_PSBLAS(SUNLinearSolver S, const char *what, do
 /* Get functions */
 SUNDIALS_EXPORT int SUNLinSolNumIters_PSBLAS(SUNLinearSolver S);
 SUNDIALS_EXPORT realtype SUNLinSolResNorm_PSBLAS(SUNLinearSolver S);
-
+SUNDIALS_EXPORT long int SUNLinSolLastFlag_PSBLAS(SUNLinearSolver S);
 
 #ifdef __cplusplus
 }
