@@ -127,7 +127,10 @@ int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
       printf("\n\nPSBLAS init!\n\n");
       ret = psb_c_dprecinit(LS_ICTXT_P(S),LS_PREC_P(S),LS_PTYPE_P(S));
       if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
-  }else if( strcmp(LS_PTYPE_P(S),"ML")==0 ){
+  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
+    strcmp(LS_PTYPE_P(S),"GS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"AS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
       ret = mld_c_dprecinit(LS_ICTXT_P(S), LS_MLPREC_P(S), LS_PTYPE_P(S));
       if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
   }
@@ -152,7 +155,10 @@ int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
       strcmp(LS_PTYPE_P(S),"DIAG") == 0 ){
       ret = psb_c_dprecbld(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_PREC_P(S));
       if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
-  }else if( strcmp(LS_PTYPE_P(S),"ML") == 0 ){
+  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
+    strcmp(LS_PTYPE_P(S),"GS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"AS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
       ret = mld_c_dhierarchy_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
       if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
       ret = mld_c_dsmoothers_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
@@ -185,7 +191,10 @@ int SUNLinSolSolve_PSBLAS(SUNLinearSolver S, SUNMatrix A,
                     LS_DESCRIPTOR_P(S),
                     &(PSBLAS_CONTENT(S)->options));
     if(ret != 0) return(SUNLS_PACKAGE_FAIL_REC);
-  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0){
+  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
+    strcmp(LS_PTYPE_P(S),"GS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"AS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
     ret=mld_c_dkrylov(LS_METHD_P(S),
                     LS_PMAT_P(S),
                     LS_MLPREC_P(S),
@@ -211,7 +220,10 @@ int SUNLinSolFree_PSBLAS(SUNLinearSolver S){
       strcmp(LS_PTYPE_P(S),"BJAC") == 0 ||
       strcmp(LS_PTYPE_P(S),"DIAG") == 0 ){
     psb_c_dprecfree(LS_PREC_P(S));
-  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0){
+  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
+    strcmp(LS_PTYPE_P(S),"GS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"AS") == 0 ||
+    strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
     mld_c_dprecfree(LS_MLPREC_P(S));
   }
 
