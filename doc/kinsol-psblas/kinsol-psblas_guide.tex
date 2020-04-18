@@ -8,6 +8,20 @@
 \usepackage{xcolor}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{dirtree}
+\usepackage{booktabs}
+
+\usepackage{array,lipsum}
+
+\newenvironment{fulltable}[1][tbp]
+{\begin{table}[#1]%
+		\hspace*{-\leftmarginwidth}%
+		\begin{minipage}{\fullwidth}}
+		{\end{minipage}\end{table}}
+
+\theoremstyle{definition}
+\newtheorem{exmp}{Example}
 
 \title{PSBLAS-KINSOL interface}
 \author{Istituto per le Applicazioni del Calcolo ``M. Picone'',\\
@@ -57,7 +71,20 @@
 	
 	\section{The logic behind a PSBLAS instrumented application}
 	
-	The main aim of the PSBLAS library is the parallel implementation of iterative solvers
+\marginlabel{
+\textit{Library structure}
+\begin{minipage}{0.9\textwidth}
+\dirtree{%
+ .1 kinsol-psblas.
+ .2 config.
+ .2 doc.
+ .2 examples.
+ .2 include.
+ .2 src.
+ .2 test.
+}
+\end{minipage}
+}	The main aim of the PSBLAS library is the parallel implementation of iterative solvers
 	for sparse linear systems,
 	\begin{equation}\label{eq:linear_system}
 		A \mathbf{x} = \mathbf{b}, \qquad A \in \mathbb{K}^{n \times n}, \qquad \mathbb{K} = \mathbb{R}, \mathbb{C},
@@ -65,7 +92,7 @@
 	through the distributed memory paradigm operating with message
 	passing. The library includes all the needed routines for this task, e.g, functions for multiplying sparse matrices by dense matrices, for solving block diagonal systems with triangular diagonal entries or for preprocessing sparse matrices.
 	
-	The pivotal choice to be made in this setting regards the distribution of the coefficient matrix $A$ for the linear system~\eqref{eq:linear_system}. In PSBLAS this choice is based on the \textbf{owner computes rule} \marginlabel{\textbf{Owner computes rule}}: each unknown is assigned to a process that will  own the corresponding row in the coefficient matrix and
+	The pivotal choice to be made in this setting regards the distribution of the coefficient matrix $A$ for the linear system~\eqref{eq:linear_system}. In PSBLAS this choice is based on the \textbf{owner computes rule}: \marginlabel{\textbf{Owner computes rule}} each unknown is assigned to a process that will  own the corresponding row in the coefficient matrix and
 	will  carry out all related computations. 
 	
 	If $A$ is obtained from the discretization of a Partial Differential Equation (PDE), this allocation strategy is equivalent to the choice of a partition of the mesh into {\em
@@ -82,6 +109,18 @@ ictxt = psb_c_init();
 psb_c_info(ictxt,&iam,&np);
 \end{lstlisting}
 	that creates a parallel environment on \lstinline[style=CStyle]|np| processors $0,\ldots,\lstinline[style=CStyle]|np|-1$, of which we are process \lstinline[style=CStyle]|iam|.
+	
+\begin{description}
+	\item[\fbox{psb\_c\_init}] this subroutine initializes the PSBLAS parallel environment, defining a virtual parallel machine, the value \texttt{ictxt} in out is the communication context identifying the virtual parallel machine.
+	This is always a duplicate of \texttt{basectxt}, so that library communications are completely separated from other communication operations
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_init();|
+	
+	\item[\fbox{psb\_c\_info}] this subroutine returns information about the PSBLAS parallel environment, defining a virtual parallel machine that is identified by the value \texttt{ictxt}. The values on return are the identifier of current process in the PSBLAS virtual parallel machine (\texttt{iam}), and the number of processes in the PSBLAS virtual parallel machine~(\texttt{np})
+	
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_info(psb_i_t ictxt,psb_i_t *iam,psb_i_t *np);|
+	
+\end{description}	
 	
 	The next step is represented by the need of subdividing the index space among processes, and this creates a mapping from the ``global'' numbering $1,\ldots,n$ to a ``local'' numbering
 	in each process. This means that each process $i$ will own a certain subset
@@ -112,7 +151,7 @@ psb_c_info(ictxt,&iam,&np);
 	for the case of a simple minded block distribution, i.e., the index space is first numbered sequentially in a standard way, then the corresponding vector is distributed according to a block distribution directive. 
 	%The discretization ensures there are IDIM *internal* points in each direction.
 	
-\noindent\rule{\columnwidth}{0.4pt}
+\begin{exmp}\label{ex:the_example}
 We consider as example the finite difference discretization of the following boundary value problem
 \begin{equation}\label{eq:boundaryproblem}
 	- \frac{b_1 \partial^2 u}{\partial x^2} - \frac{b_2 \partial^2 u}{\partial y^2} - \frac{b_3 \partial^2 u}{\partial z^2} + \frac{a_1 \partial u}{\partial x} + \frac{a_2 \partial u}{\partial y} + a_3 \frac{a_3 \partial u}{\partial z} = 0, 
@@ -141,15 +180,53 @@ for (k=0; k<nl; k++)
 	vl[k] = i+k; 
 psb_c_cdall_vl(nl,vl,ictxt,cdh);
 \end{lstlisting}
-\noindent\rule{\columnwidth}{0.4pt}	
+\end{exmp}
 
-	Now that the initial distribution of the index space has been performed, we need to allocate  dense vectors and sparse matrices on such index space, and thus we define the complete topology of our computational problem. Since our task is to use the capabilities of SUNDIALS-KINSOL to solve for nonlinear problems, here lies the core of the interfacing between the two codes. In the next two Sections~\ref{sec:nvector}, and Section~\ref{sec:sunmatrix} we describe such encapsulation for dense vector, and sparse matrices. Then in Section~\ref{sec:sunlinsol} we describe the interfacing with the \textbf{linear solvers} and \textbf{preconditioners} 
+	Now that the initial distribution of the index space has been performed, we need to allocate  dense vectors and sparse matrices on such index space, and thus we define the complete topology of our computational problem. Since our task is to use the capabilities of SUNDIALS-KINSOL to solve for nonlinear problems, here lies the core of the interfacing between the two codes. 
+
+	Before the termination of the program, \textit{after} having freed/destroyed all the objects instantiated on the descriptor \texttt{cdh}, you need also to free the memory occupied by it, and the to terminate the parallel environment. This is achieved by means of the following routines.
+	\begin{description}
+		\item[\fbox{\texttt{psb\_c\_cdfree}}] frees a communication descriptor
+		
+		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_cdfree(psb_c_descriptor *cdh)|;
+		
+		\item[\fbox{\texttt{psb\_c\_exit}}] this subroutine exits from the PSBLAS parallel virtual machine, observe that this routine may be called even if a previous call to \lstinline[style=CStyle]|psb_info| has returned with \lstinline[style=CStyle]|iam=-1|.
+		
+		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_exit(psb_i_t ictxt);| 
+		
+		\item[\fbox{\texttt{psb\_c\_abort}}] this subroutine aborts computation on the parallel virtual machine, and can be used when error that needs the program to fail occurs.
+		
+		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_abort(psb_i_t ictxt);| 		
+		 
+	\end{description}
+
+
+	
+	In the next two Sections~\ref{sec:nvector}, and Section~\ref{sec:sunmatrix} we describe such encapsulation for dense vector, and sparse matrices. Then in Section~\ref{sec:sunlinsol} we describe the interfacing with the \textbf{linear solvers} and \textbf{preconditioners} 
 
 	Complete information on the PSBLAS data structures, and functions that are mentioned along the text can be found in~\cite{psblasguide}.
 	
 	
 	\section{The NVECTOR\_PSBLAS implementation}\label{sec:nvector}
-	The NVECTOR\_PSBLAS implementation of the SUNDIALS NVECTOR module provides an interface to the PSBLAS code for handling distributed dense vectors. 
+\marginlabel{
+\textit{Library structure}
+\begin{minipage}{0.9\textwidth}
+\dirtree{%
+ .1 kinsol-psblas.
+ .2 config.
+ .2 doc.
+ .2 examples.
+ .3 nvector.
+ .4 psblas.
+ .2 include.
+ .3 nvector.
+ .2 src.
+ .3 nvector.
+ .4 psblas.
+ .2 test.
+}
+\end{minipage}
+}	The NVECTOR\_PSBLAS implementation of the SUNDIALS NVECTOR module provides an interface to the PSBLAS code for handling distributed dense vectors. 
 	It defines the \emph{content} field of \texttt{N\_Vector} to be a structure containing the PSBLAS descriptor for the data distribution, a PSBLAS vector of double, and the PSBLAS communicator (context).
 	
 \begin{lstlisting}[style=CStyle]
@@ -449,14 +526,31 @@ int N_VEnableLinearCombinationVectorArray_PSBLAS(N_Vector v,booleantype tf);
 
 \section{The SUNMATRIX\_PSBLAS implementation}\label{sec:sunmatrix}
 
-The SUNMATRIX\_PSBLAS implementation of the SUNDIALS SUNMATRIX module provides an interface to the PSBLAS code for handling distributed sparse matrices. 
+\marginlabel{
+\textit{Library structure}
+\begin{minipage}{0.9\textwidth}
+\dirtree{%
+ .1 kinsol-psblas.
+ .2 config.
+ .2 doc.
+ .2 examples.
+ .3 sunmatrix.
+ .4 psblas.
+ .2 include.
+ .3 sunmatrix.
+ .2 src.
+ .3 sunmatrix.
+ .4 psblas.
+ .2 test.
+}
+\end{minipage}}The SUNMATRIX\_PSBLAS implementation of the SUNDIALS SUNMATRIX module provides an interface to the PSBLAS code for handling distributed sparse matrices. 
 It defines the \emph{content} field of \texttt{SUNMATRIX} to be a structure containing the PSBLAS descriptor for the data distribution, a PSBLAS sparse matrix object of double, and the PSBLAS communicator (context).
 
 \begin{lstlisting}[style=CStyle]
 struct _SUNMatrixContent_PSBLAS {
- psb_c_descriptor *cdh;       /* descriptor for data distribution */
- psb_c_dspmat  *ah;           /* PSBLAS sparse matrix             */
- int ictxt;                   /* PSBLAS communicator              */
+ psb_c_descriptor *cdh;/* descriptor for data distribution */
+ psb_c_dspmat  *ah;    /* PSBLAS sparse matrix             */
+ int ictxt;            /* PSBLAS communicator              */
 };
 \end{lstlisting}
 
@@ -575,7 +669,7 @@ success/failure of the operation.
 \marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatSpace_PSBLAS(SUNMatrix A, long int *lenrw, long int *leniw)|
 \end{description}
 
-\subsubsection{An example of matrix assembly}
+\subsubsection{An example of matrix assembly}\label{sec:example_of_matrix_assembly}
 
 As an example of usage of this matrix routines we consider the same boundary value problem in~\eqref{eq:boundaryproblem}, to build the matrix $A$ associated to the centered finite difference discretization
 \begin{equation}
@@ -593,8 +687,256 @@ We have firs initialized the sparse PSBLAS matrix inside the SUNMATRIX container
 The complete example can be found in \texttt{examples/sunmatrix/psblas}.
 
 \section{The SUNLINSOL\_PSBLAS implementation}\label{sec:sunlinsol}
+\marginlabel{
+\textit{Library structure}
+\begin{minipage}{0.9\textwidth}
+\dirtree{%
+ .1 kinsol-psblas.
+ .2 config.
+ .2 doc.
+ .2 examples.
+ .3 sunlinsol.
+ .4 psblas.
+ .2 include.
+ .3 sunlinsol.
+ .2 src.
+ .3 sunlinsol.
+ .4 psblas.
+ .2 test.
+}
+\end{minipage}
+}	The SUNLINSOL\_PSBLAS implementation of the SUNDIALS SUNLINSOL module provides an interface to the PSBLAS code for handling the iterative solution of large and sparse linear systems. It defines the \emph{content} field of \texttt{SUNLinsol} to be a structure containing the options needed to setup a PSBLAS solver, the PSBLAS descriptor for the data distribution, the pointer to both PSBLAS and MLD2P4 preconditioner, the PSBLAS sparse matrix for which the solver (and the preconditioner) is instantiated, the PSBLAS communicator (context), and two strings that identify what iterative method and type of preconditioner we are dealing with.
+\begin{lstlisting}[style=CStyle]
+struct _SUNLinearSolverContent_PSBLAS {
+ psb_c_SolverOptions options;/* PSBLAS solver options    */
+ psb_c_dprec *ph;            /* PSBLAS preconditioner    */
+ mld_c_dprec *mh;            /* MLD2P4 preconditioner    */
+ psb_c_descriptor *cdh;      /* Descriptor               */
+ psb_c_dspmat  *ah;          /* PSBLAS sparse matrix     */
+ int ictxt;                  /* PSBLAS communicator      */
+ char methd[40];             /* String for Method        */
+ char ptype[20];             /* String for Preconditioner*/
+};
+\end{lstlisting}
 
-\subsection{Algebraic Multigrid Preconditioners}
+The structure \texttt{options} contains the options that are common in between the different iterative solver included in PSBLAS that are interfaced with this library
+\begin{lstlisting}[style=CStyle]
+typedef struct psb_c_solveroptions {
+ int iter;  /* On exit how many iterations were performed */
+ int itmax; /* On entry maximum number of iterations      */
+ int itrace;/* On entry print an info message every itrace iterations */
+ int irst;  /* Restart depth for RGMRES or BiCGSTAB(L)    */
+ int istop; /* Stopping criterion: 1:backward error 2: ||r||_2/||b||_2 */
+ double eps;/* Stopping tolerance */ 
+ double err;/* Convergence indicator on exit */
+} psb_c_SolverOptions; 
+\end{lstlisting}
+The default settings for this structure can be set by means of the \lstinline[style=CStyle]|psb_c_DefaultSolverOptions| routine
+
+\marginlabel{Prototype} \lstinline[style=CStyle]| int psb_c_DefaultSolverOptions(psb_c_SolverOptions *options)|
+that sets the following default values
+\begin{lstlisting}[style=CStyle]
+options.itmax  = 1000;
+options.itrace = 0;
+options.istop  = 2;
+options.irst   = 10;
+options.eps    = 1.d-6;
+err            = 0;
+\end{lstlisting}
+
+Specifically, the Krylov method included from the PSBLAS library are given in Table~\ref{tab:krylov_methods}, and that permit to solve a wide range of problems.
+\begin{fulltable}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\lstinline[style=CStyle]|methd| & Method & Type of Matrix \\
+\midrule
+\lstinline[style=CStyle]|"CG"| & Conjugate Gradient & SPD \\
+\lstinline[style=CStyle]|"CGS"| & Conjugate Gradient Stabilized  & General \\
+\lstinline[style=CStyle]|"GCR"| & Generalized Conjugate Residual  & SPD  \\
+\lstinline[style=CStyle]|"FCG"| & Flexible Conjugate Gradient  & SPD  \\
+\lstinline[style=CStyle]|"BICG"| & Bi-Conjugate Gradient & General \\
+\lstinline[style=CStyle]|"BICGSTAB"| & Bi-Conjugate Gradient Stabilized & General \\ 
+\lstinline[style=CStyle]|"BICGSTABL"| & Restarted Bi-Conjugate Gradient Stabilized& General \\
+\lstinline[style=CStyle]|"RGMRES"| & Restarted Generalized Minimal Residual & General \\
+\bottomrule
+\end{tabular}
+	\caption{Krylov methods included with the PSBLAS library.}\label{tab:krylov_methods}
+\end{fulltable}
+
+	The general type of preconditioner can be instead selected by means of the string \lstinline[style=CStyle]|ptype|, that can assume three values for the basic preconditioner implemented in the core PSBLAS library that are
+	\begin{description}
+		\item[\textcolor{mPurple}{\texttt{"NONE"}}] no preconditioning is used, i.e., the preconditioner is just a copy operator acting on the residuals,
+		\item[\textcolor{mPurple}{\texttt{"BJAC"}}] precondition by means of a factorization of the block-diagonal of matrix A, the block boundaries are determined by using the data allocation boundaries that have been defined for each process. It is implemented to require no communication, to solve the system on the blocks the incomplete ILU(0) factorization is used,
+		\item[\textcolor{mPurple}{\texttt{"DIAG"}}] this is a simple diagonal scaling; each entry of the input vector is multiplied by the reciprocal of the sum of the absolute values of the coefficients in the corresponding row of matrix A.
+	\end{description}
+	Each of this choices select the routines that work with the \lstinline[style=CStyle]|psb_c_dprec *ph| in the SUNLINSOL content and leaves \lstinline[style=CStyle]|mld_c_dprec *mh| a \lstinline[style=CStyle]|NULL| pointer.
+
+	The more elaborated \textit{multilevel} preconditioners are enable by setting \lstinline[style=CStyle]|ptype| to one of the following string
+	\begin{description}
+		\item[\textcolor{mPurple}{\texttt{"GS"}}] hybrid Gauss-Seidel (forward), that is, a global block Jacobi preconditioner with Gauss-Seidel as local solver on the blocks,
+		\item[\textcolor{mPurple}{\texttt{"FBGS"}}] symmetrized hybrid Gauss-Seidel,that is, forward Gauss-Seidel followed by backward Gauss-Seidel.
+		\item[\textcolor{mPurple}{\texttt{"AS"}}] Additive Schwarz (AS), with overlap 1 and
+		ILU(0) on the local blocks.
+		\item[\textcolor{mPurple}{\texttt{"ML"}}] this enables the construction of a multilevel preconditioner for which all the details for these preconditioner are described in Section~\ref{sec:mld2p4}, and are based on the ML2DP4 package~\cite{MR2738234,mld2p4guide}.
+	\end{description}
+	This choice selects the routines that work with the \lstinline[style=CStyle]|mld_c_dprec *mh| in the SUNLINSOL content and leaves \lstinline[style=CStyle]|psb_c_dprec *ph| a \lstinline[style=CStyle]|NULL| pointer. 
+
+
+\subsection{SUNLINSOL\_PSBLAS accessor macros}
+
+The following macros are provided to access the content of a SUNLINSOL\_PSBLAS linear solver. The suffix \texttt{\_P} in the names denotes the fact that the data are in distributed memory.
+
+\begin{lstlisting}[style=CStyle]
+#define PSBLAS_CONTENT(S)  ( (SUNLinearSolverContent_PSBLAS)(S->content) )
+#define LS_PREC_P(S)       ( PSBLAS_CONTENT(S)->ph )
+#define LS_MLPREC_P(S)     ( PSBLAS_CONTENT(S)->mh )
+#define LS_DESCRIPTOR_P(S) ( PSBLAS_CONTENT(S)->cdh )
+#define LS_PMAT_P(S)       ( PSBLAS_CONTENT(S)->ah )
+#define LS_ICTXT_P(S)      ( PSBLAS_CONTENT(S)->ictxt )
+#define LS_METHD_P(S)      ( PSBLAS_CONTENT(S)->methd )
+#define LS_PTYPE_P(S)      ( PSBLAS_CONTENT(S)->ptype )
+\end{lstlisting}
+
+\marginlabel{\texttt{PSBLAS\_CONTENT(S)}} this macro gives access to the contents of the PSBLAS linear solver \texttt{SUNLINSOL}.
+	
+\marginlabel{\texttt{LS\_PREC\_P(S)}} this macro gives access to the pointer to the PSBLAS preconditioner object.
+
+\marginlabel{\texttt{LS\_MLPREC\_P(S)}} this macro gives access to the pointer to the MLD2P4 preconditioner object.
+
+\marginlabel{\texttt{LS\_DESCRIPTOR\_P(S)}, \texttt{LS\_PMAT\_P(S)}} these macros give instead individual access to the parts of the content of a PSBLAS parallel \texttt{SUNMATRIX}.
+
+\marginlabel{\texttt{LS\_ICTXT\_P(S)}} this macro provides the PSBLAS context used by the SUNMATRIX\_PSBLAS sparse matrices and vectors.
+
+\marginlabel{\texttt{LS\_METHD\_P(S)}} this macro gives access to the string that select the type of Krylov solver to be used as iterative method.
+
+\marginlabel{\texttt{LS\_PTYPE\_P(S)}} this macro gives access to the string that select the type of preconditioner to be used within the iterative method.
+
+\subsection{SUNLINSOL\_PSBLAS functions}
+
+The SUNLINSOL\_PSBLAS implementation provides PSBLAS implementations of all the linear solver operations listed in KINSOL library~\cite[Section~8.1.1]{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed there by appending the suffix \texttt{\_PSBLAS}. The SUNLINSOL\_PSBLAS implementation provides the following additional user--callable routines that can be used to set-up the values for the \lstinline[style=CStyle]|ptype="ML"| preconditioners.
+
+\begin{description}
+\item[\fbox{\texttt{SUNLinSolSeti\_PSBLAS}}] given a linear solver with \lstinline[style=CStyle]|ptype="ML"| this routine set the option \lstinline[style=CStyle]|const char *what| to the given integer value
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolSeti_PSBLAS(SUNLinearSolver S, const char *what, psb_i_t val)|
+
+\item[\fbox{\texttt{SUNLinSolSetc\_PSBLAS}}] given a linear solver with \lstinline[style=CStyle]|ptype="ML"| this routine set the option \lstinline[style=CStyle]|const char *what| to the given string value
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolSetc_PSBLAS(SUNLinearSolver S, const char *what, const char *val)|
+
+\item[\fbox{\texttt{SUNLinSolSetr\_PSBLAS}}] given a linear solver with \lstinline[style=CStyle]|ptype="ML"| this routine set the option \lstinline[style=CStyle]|const char *what| to the given \lstinline[style=CStyle]|double val|
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolSetr_PSBLAS(SUNLinearSolver S, const char *what, double val)|
+\end{description}
+
+The detail of the options for the various solver are recalled in Section~\ref{sec:mld2p4}, and are fully detailed in~\cite{mld2p4guide}.
+
+\subsubsection{Description of the SUNLINSOL\_PSBLAS functions}
+
+\begin{description}
+
+\item[\fbox{\texttt{SUNLinSol\_PSBLAS}}] Only the solver options are set at this stage, all the information regarding the communicator, the PSBLAS contex are imported from the matrix when the solver is initialized. The setup of the preconditioner has to be done with the \lstinline[style=CStyle]|SUNLinSolSetup_PSBLAS| routine. Here the codes decide only if we are using a PSBLAS or an MLD2P4 preconditioner by looking at the string char \lstinline[style=CStyle]|ptype[]|. 
+	
+\marginlabel{Prototype} \lstinline[style=CStyle]|SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[])|
+
+\item[\fbox{\texttt{SUNLinSolGetType\_PSBLAS}}] this function returns the type identifier for the linear solver, that in this case is of matrix-iterative type.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|SUNLinearSolver_Type SUNLinSolGetType_PSBLAS(SUNLinearSolver S)|
+
+\item[\fbox{\texttt{SUNLinSolInitialize\_PSBLAS}}] this function performs the linear solver initialization by assuming that all solver-specific options have been set, i.e., in the case of \lstinline[style=CStyle]|ptype="ML"| preconditioner after the calls to the \texttt{SUNLinSolSet[i,c,r]\_PSBLAS} routines.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S)|
+
+\item[\fbox{\texttt{SUNLinSolSetup\_PSBLAS}}] this function performs the linear solver setup, based on an (possibly) updated system \lstinline[style=CStyle]|SUNMATRIX A|. This may be called frequently (e.g., with a full
+Newton method) or infrequently (for a modified Newton method), based on the type of
+integrator and/or nonlinear solver requesting the solves.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A)|
+
+\item[\fbox{\texttt{SUNLinSolSolve\_PSBLAS}}] this function performs the actual solve of the linear system $A\mathbf{x} = \mathbf{b}$ (by eventually using the preconditioner $P^{-1}$ encoded in the \lstinline[style=CStyle]|SUNLinearSolver S|).
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolSolve_PSBLAS(SUNLinearSolver S, SUNMatrix A,N_Vector x, N_Vector b,realtype tol)|
+
+\item[\fbox{\texttt{SUNLinSolFree\_PSBLAS}}] this function frees memory allocated by the linear solver, it is important to notice that this routine frees only the preconditioner and the structure containing the various part of the solver: the communicator and the matrix are still there, they should be freed after the matrix has been destroyed.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolFree_PSBLAS(SUNLinearSolver S)|
+
+\item[\fbox{\texttt{SUNLinSolNumIters\_PSBLAS}}] return the number of linear iterations
+performed in the last solve call.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolNumIters_PSBLAS(SUNLinearSolver S)|
+
+\item[\fbox{\texttt{SUNLinSolResNorm\_PSBLAS}}] return the residual of the last linear iteration performed in the last solve call.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|realtype SUNLinSolResNorm_PSBLAS(SUNLinearSolver S)|
+
+\item[\fbox{\texttt{SUNLinSolLastFlag\_PSBLAS}}] return the last error flag encountered
+within the linear solver. This is not called by the sundials packages directly; it allows
+the user to investigate linear solver issues after a failed solve.
+
+\marginlabel{Prototype} \lstinline[style=CStyle]|long int SUNLinSolLastFlag_PSBLAS(SUNLinearSolver S)|
+\end{description}
+
+\subsection{Algebraic Multigrid Preconditioners: the MLD2P4 package}\label{sec:mld2p4}
+
+We consider here the classic set of an algebraic multigrid preconditioner. Thus we have as finest index space the set of row (column) indices of $A$, i.e.,
+$\Omega = \{1, 2, \ldots, n\}$. 
+Any of the algebraic multilevel preconditioners that is implemented in the MLD2P4 package generates a hierarchy of index spaces and a corresponding hierarchy of matrices,
+\[ \Omega^1 \equiv \Omega \supset \Omega^2 \supset \ldots \supset \Omega^{nlev},
+\quad A^1 \equiv A, A^2, \ldots, A^{nlev}, \]
+by using the information contained in $A$, \textbf{without assuming any
+knowledge of the geometry of the problem} from which $A$ originates.
+A vector space $\mathbb{R}^{n_{k}}$ is associated with $\Omega^k$,
+where $n_k$ is the size of $\Omega^k$.
+For all $k < nlev$, a restriction operator and a prolongation one are built,
+which connect two levels $k$ and $k+1$:
+\[
+P^k \in \mathbb{R}^{n_k \times n_{k+1}}, \quad 
+R^k \in \mathbb{R}^{n_{k+1}\times n_k};
+\]
+the matrix $A^{k+1}$ is computed by using the previous operators according
+to the Galerkin approach, i.e.,
+\[
+A^{k+1}=R^kA^kP^k.
+\]
+For the construction of $R^k$ we have that $R^k=(P^k)^T$.
+A smoother with iteration matrix $M^k$ is set up at each level $k < nlev$, and a solver
+is set up at the coarsest level, so that they are ready for application. 
+
+All this construction is what is usually called the build-phase of the hierarchy of AMG components, i.e., the so-called build phase of the preconditioner.
+
+The MLD2P4 package offers a plethora of way to obtain all the ingredient needed to build what is described here. These are explained in Tables~2 to~8 in~\cite{mld2p4guide} and, depending on the type of option, can all be set by means of the \lstinline[style=CStyle]|SUNLinSolSet[i/c/r]_PSBLAS| routines.
+
+We refer back to the guide~\cite{mld2p4guide} for the full details on how to setup the preconditioner.
+
+\subsubsection{An example of linear system solution}
+
+We can consider the same context of Example~\ref{ex:the_example}, with the matrix construction detail in Section~\ref{sec:example_of_matrix_assembly}. Now that both the data distribution, and the construction of the (distributed) sparse matrix $A$ and right hand-side $\mathbf{b}$ have been completed we only need to create the SUNLINSOL object, and setup the preconditioner. 
+
+\begin{lstlisting}[style=CStyle,caption="An example of solution with PCG preconditioned by a ML preconditioner",label=lst:thesolution]
+SUNLinearSolver LS;             /* linear solver object    */
+psb_c_SolverOptions options;    /* Solver options          */
+/* Set up the solver options */
+psb_c_DefaultSolverOptions(&options);
+options.eps    = tol;
+options.itmax  = itmax;
+options.irst   = irst;
+options.itrace = 1;
+options.istop  = istop;
+/* Create PSBLAS/MLD2P4 linear solver */
+LS = SUNLinSol_PSBLAS(options, "CG", "ML");
+SUNLinSolInitialize(LS);
+SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
+SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
+SUNLinSolSetc_PSBLAS(LS,"COARSE_SOLVE","BJAC");
+SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
+SUNLinSolSeti_PSBLAS(LS,"COARSE_FILLIN",0);
+SUNLinSolSetup(LS, A);
+SUNLinSolSolve_PSBLAS(LS, A, x, b, tol);
+\end{lstlisting}
+
+The example given in the code~\ref{lst:thesolution}, initializes a linear solver requesting for a Conjugate Gradient method (\lstinline[style=CStyle]|"CG"|), preconditioned by a multi-level preconditioner (\lstinline[style=CStyle]|"ML"|). Then, after the initialization step, some of the properties of the multigrid cycle are selected. Specifically, we decide to use two smoother sweeps of Block-Jacobi with an ILU(1) subsolver (\lstinline[style=CStyle]|"SUB_FILLIN"|), and set again a Block-Jacobi method as coarse solver (\lstinline[style=CStyle]|"COARSE_SUBSOLVE"|) that uses instead as solver for the blocks and ILU(0) (\lstinline[style=CStyle]|"COARSE_FILLIN"|) factorization. Then a setup step is performed, during this step the multigrid hierarchy is assembled. Finally the solution of the linear system is computed by a call to \lstinline[style=CStyle]|SUNLinSolSolve_PSBLAS|. Observe that if we have put the value \lstinline[style=CStyle]|options.itrace = 1;| the solve routine will print convergence information for each iteration.
 
 \appendix
 
@@ -694,6 +1036,6 @@ overhead. Therefore packing a ``certain amount of data'' (\texttt{10*NBMAX}) int
 to the insertion routine is advisable. The best performing value of \texttt{NBMAX} depends on both the architecture of the computer being used and
 on the problem structure.
 
-\printbibliography
+\printbibliography[heading=bibintoc]
 
 \end{document}
