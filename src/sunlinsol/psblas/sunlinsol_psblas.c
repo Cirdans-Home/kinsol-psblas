@@ -158,7 +158,6 @@ int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
       ret = mld_c_dsmoothers_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
       if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
   }
-  printf("Built preconditioner %s\n", LS_PTYPE_P(S));
 
   return(SUNLS_SUCCESS);
 
