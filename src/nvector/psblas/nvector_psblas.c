@@ -454,9 +454,9 @@ realtype *N_VGetArrayPointer_PSBLAS(N_Vector v)
   return(pointer);
 }
 
-void N_VSetArrayPointer_PSBLAS(psb_c_dvector *v_data, N_Vector v)
+void N_VSetArrayPointer_PSBLAS(realtype *v_data, N_Vector v)
 {
-  if (N_VGetLocalLength_PSBLAS(v) > 0) NV_PVEC_P(v) = v_data;
+  printf("Warning : N_VSetArrayPointer is a dummy function for N_Vector PSBLAS\n");
 
   return;
 }

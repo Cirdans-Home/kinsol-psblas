@@ -119,7 +119,7 @@ SUNDIALS_EXPORT void N_VDestroy_PSBLAS(N_Vector v);
 SUNDIALS_EXPORT void N_VSpace_PSBLAS(N_Vector v, sunindextype *lrw,
                                        sunindextype *liw);
 SUNDIALS_EXPORT realtype *N_VGetArrayPointer_PSBLAS(N_Vector v);
-SUNDIALS_EXPORT void N_VSetArrayPointer_PSBLAS(psb_c_dvector *v_data, N_Vector v);
+SUNDIALS_EXPORT void N_VSetArrayPointer_PSBLAS(realtype *v_data, N_Vector v);
 
 /* standard vector operations */
 SUNDIALS_EXPORT void N_VLinearSum_PSBLAS(realtype a, N_Vector x, realtype b, N_Vector y, N_Vector z);
