@@ -10,3 +10,6 @@ The present version interfaces KINSOL with the functionalities for handling dist
 modules that use the functionalities offered by the PSBLAS and MLD2P4 libraries. 
 
 The main objective of this code is enabling the KINSOL Newton-Krylov solver for the usage of the Krylov solvers and the multilevel preconditioners included in the PSBLAS/MLD2P4 library.
+
+## Funding
+Work supported by the EC under the Horizon 2020 Project “Energy oriented Centre of Excellence for computing applications” (EoCoE II), Project ID: 824158
