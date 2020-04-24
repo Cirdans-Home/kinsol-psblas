@@ -9,4 +9,4 @@ The present version interfaces KINSOL with the functionalities for handling dist
 * SUNLinsol
 modules that use the functionalities offered by the PSBLAS and MLD2P4 libraries. 
 
-The main objective of this code is enabling in the KINSOL Newton-Krylov solver for the usage of the Krylov solvers and the multilevel preconditioners included in the PSBLAS/MLD2P4 library.
+The main objective of this code is enabling the KINSOL Newton-Krylov solver for the usage of the Krylov solvers and the multilevel preconditioners included in the PSBLAS/MLD2P4 library.
