@@ -11,6 +11,8 @@
 \usepackage{amsthm}
 \usepackage{dirtree}
 \usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes,shadows,arrows,matrix,backgrounds}
 
 \usepackage{array,lipsum}
 
@@ -19,6 +21,12 @@
 		\hspace*{-\leftmarginwidth}%
 		\begin{minipage}{\fullwidth}}
 		{\end{minipage}\end{table}}
+
+\newenvironment{fullfigure}[1][tbp]
+{\begin{figure}[#1]%
+		\hspace*{-\leftmarginwidth}%
+		\begin{minipage}{\fullwidth}}
+		{\end{minipage}\end{figure}}
 
 \theoremstyle{definition}
 \newtheorem{exmp}{Example}
@@ -29,7 +37,7 @@
 	Pasqua D'Ambra \\
 	Fabio Durastante \\
 	Salvatore Filippone \\
-	PSBLAS 3.6.1 --- Kinsol Interface Version 1}
+	PSBLAS development --- Kinsol Interface Version 1}
 \date{\today}
 \emergencystretch1em
 
@@ -39,6 +47,9 @@
 \definecolor{mGreen}{rgb}{0,0.6,0}
 \definecolor{mGray}{rgb}{0.5,0.5,0.5}
 \definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{sunGreen}{HTML}{70ad47}
+\definecolor{sunCyan}{HTML}{dae3f3}
+\definecolor{sunBlue}{HTML}{8faadc}
 \usepackage{listings}
 \lstdefinestyle{CStyle}{
 	commentstyle=\color{mGreen},
@@ -60,7 +71,7 @@
 	morekeywords={N_Vector,sunindextype,psb_i_t,psb_c_descriptor,psb_c_dvector,booleantype,psb_c_info,psb_c_init,psb_cdall,psb_c_cdall_vl,psb_l_t}
 }
 
-\usepackage[backend=biber]{biblatex}
+\usepackage[backend=biber,sorting=nty,sortcites=true]{biblatex}
 \bibliography{bibliography}
 
 \begin{document}
@@ -69,6 +80,140 @@
 	\tableofcontents
 	\newpage
 	
+	
+	\section{SUNDIALS KINSOL: Newton--Krylov Solvers}
+	
+	The original SUNDIALS library is a SUite of Nonlinear and DIfferential/ALgebraic equation Solvers.  It consists of the following six solvers: 
+	\begin{itemize}
+		\item CVODE, solves initial value problems for ordinary differential equation (ODE) systems; 
+		\item CVODES, solves ODE systems and includes sensitivity analysis capabilities (forward and adjoint); 
+		\item ARKODE, solves initial value ODE problems with additive Runge-Kutta methods, include support for IMEX methods; 
+		\item IDA, solves initial value problems for differential-algebraic equation (DAE) systems; 
+		\item IDAS, solves DAE systems and includes sensitivity analysis capabilities (forward and adjoint); 
+		\item KINSOL, solves nonlinear algebraic systems.
+	\end{itemize}
+	
+	The numerical operations performed in these codes are operations on vectors and matrices, and the codes provides both custom implementation and interfaces to these vector operations. What we provide here is a particular interface for such operations to the linear algebra operations provided by the Parallel Sparse BLAS (PSBLAS) library~\cite{filippone2000psblas,Filippone:2017:SMM:3034774.3017994,cardellini2014design,filippone2012object}; see the whole structure of the library in Figure~\ref{fig:software_structure}.
+
+	\begin{fullfigure}[htpp]
+	\centering
+	\tikzstyle{library}=[rectangle, draw=black, rounded corners, fill=yellow!40, drop shadow,
+	text centered, anchor=north, text=black, text width=2.5cm]
+	\tikzstyle{api}=[rectangle, draw=black, fill=sunGreen, drop shadow,
+	text centered, anchor=north, text=black, text width=4cm]
+	\begin{tikzpicture}[scale=0.73, transform shape]
+		\node (SUNDIALS) [library]{ SUNDIALS };
+		\node (center) [below=of SUNDIALS] {};
+		\node (ARKODE) [library, left=of center]{ ARKODE };
+		\node (CVODES) [library, left=of ARKODE]{ CVODES };
+		\node (CVODE) [library, left=of CVODES]{ CVODE };		
+		\node (IDA) [library, right=of ARKODE]{ IDA };
+		\node (IDAS) [library, right=of IDA]{ IDAS };
+		\node (KINSOL) [library, right=of IDAS]{ KINSOL };
+		\draw (SUNDIALS.south) -- ([yshift=0.5cm, xshift=0cm]center.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center.north) -| (CVODE.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center.north) -| (CVODES.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center.north) -| (ARKODE.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center.north) -| (IDA.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center.north) -| (IDAS.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center.north) -| (KINSOL.north);
+		\node (center2) [text width=0cm,below=of ARKODE] {};
+		\draw[-] ([yshift=-0cm, xshift=0cm]CVODE.south) |- ([yshift=0.5cm, xshift=0cm]center2.north);
+		\draw[-] ([yshift=-0cm, xshift=0cm]CVODES.south) |- ([yshift=0.5cm, xshift=0cm]center2.north);
+		\draw[-] ([yshift=-0cm, xshift=0cm]ARKODE.south) |- ([yshift=0.5cm, xshift=0cm]center2.north);
+		\draw[-] ([yshift=-0cm, xshift=0cm]IDA.south) |- ([yshift=0.5cm, xshift=0cm]center2.north);
+		\draw[-] ([yshift=-0cm, xshift=0cm]IDAS.south) |- ([yshift=0.5cm, xshift=0cm]center2.north);
+		\draw[-] ([yshift=-0cm, xshift=0cm]KINSOL.south) |- ([yshift=0.5cm, xshift=0cm]center2.north);
+		\node (SUNMATRIX) [api,text width=3.5cm,left=of center2,xshift=1.2cm,yshift=-0.3cm] {SUNMATRIX API};
+		\node (NVECTOR) [api,left=of SUNMATRIX] {NVECTOR API};
+		\node (SUNLINEARSOLVER) [api,text width=4.5cm,right=of center2,yshift=-0.3cm] {SUNLINEARSOLVER API};
+		\node (SUNNONLINEARSOLVER) [api,text width=5.5cm,right=of SUNLINEARSOLVER] {SUNNONLINEARSOLVER API};
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center2.south) -| ([yshift=0cm, xshift=0cm]SUNMATRIX.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center2.south) -| ([yshift=0cm, xshift=0cm]NVECTOR.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center2.south) -| ([yshift=0cm, xshift=0cm]SUNLINEARSOLVER.north);
+		\draw[->] ([yshift=0.5cm, xshift=0cm]center2.south) -| ([yshift=0cm, xshift=0cm]SUNNONLINEARSOLVER.north);
+		\draw[->] ([yshift=-0.65cm, xshift=-2cm]center.south) -- ([yshift=0.45cm, xshift=0.5cm]center2.south);
+		\matrix (vectormodules)[matrix of nodes,nodes={rectangle, rounded corners, draw=black, fill=gray!20,
+			text centered, anchor=north, text=black, text width=1.3cm,font={\tiny}},column sep=2mm, row sep=1mm,below=of NVECTOR]{
+			SERIAL & PARALLEL (MPI) \\
+			OPENMP & PTHREADS \\
+			PARHYP (HYPRE) & PETSC \\
+			CUDA & RAJA \\
+			MPI + CUDA & MPI + RAJA \\
+			OPENMP & |[rectangle,draw,fill=red!70]| PSBLAS \\
+		};
+		\node[font=\scriptsize,anchor=south] (vectormodtitle) at (vectormodules.north) {\textbf{VECTOR MODULES}};
+		\matrix (matrixmodules)[matrix of nodes,nodes={rectangle, rounded corners, draw=black, fill=gray!20,
+		text centered, anchor=north, text=black, text width=1.3cm,font={\tiny}},column sep=2mm, row sep=1mm,below=of SUNMATRIX]{
+		DENSE \\
+		BAND \\
+		SPARSE \\
+		|[rectangle,draw,fill=red!70]|PSBLAS \\
+		};
+		\node[font=\scriptsize,anchor=south] (matrixmodtitle) at (matrixmodules.north) {\textbf{MATRIX MODULES}};
+		\matrix (lsmodules)[matrix of nodes,nodes={rectangle, rounded corners, draw=black, fill=gray!20,
+			text centered, anchor=north, text=black, text width=1.5cm,font={\tiny}},column sep=2mm, row sep=1mm,rectangle,fill=sunBlue,draw=black,below=of SUNLINEARSOLVER,yshift=-0.45cm]{
+			DENSE & BAND \\
+			LAPACK DENSE & LAPACK BAND \\
+			KLU & SUPERLU\_MT \\
+			|[rectangle,draw,fill=red!70]| PSBLAS MLD2P4 & \\
+		};
+		\node[font=\scriptsize,anchor=south] (overtitle) at (lsmodules.north) {\textbf{MATRIX BASED}};
+		\node[font=\scriptsize,anchor=south] (linearsolmodtitle) at (overtitle.north) {\textbf{LINEAR SOLVER MODULES}};
+		\node[font=\scriptsize,anchor=south] (undertitle) at ([yshift=-0.6cm]lsmodules.south) {\textbf{MATRIX-FREE}};
+		\matrix (lsmodules2)[matrix of nodes,nodes={rectangle, rounded corners, draw=black, fill=gray!20,
+			text centered, anchor=north, text=black, text width=1.5cm,font={\tiny}},column sep=2mm, row sep=1mm,rectangle,fill=sunBlue,draw=black,below=of undertitle,yshift=1cm]{
+			SPBCG & SPGMR \\
+			SPFGMR & SPTFQMR \\
+			PCG & \\
+		};
+		\matrix (lsmodules3)[matrix of nodes,nodes={rectangle, rounded corners, draw=black, fill=gray!20,
+			text centered, anchor=north, text=black, text width=1.5cm,font={\tiny}},column sep=2mm, row sep=1mm,rectangle,below=of SUNNONLINEARSOLVER]{
+			NEWTON \\
+			FIXED POINT \\
+		};
+		\node[font=\scriptsize,anchor=south] (nonlinearsolmodtitle) at (lsmodules3.north) {\textbf{NONLINEAR SOLVER MODULES}};
+		\draw[->] (NVECTOR.south) -- (vectormodtitle.north);
+		\draw[->] (SUNMATRIX.south) -- (matrixmodtitle.north);
+		\draw[->] (SUNLINEARSOLVER.south) -- (linearsolmodtitle.north);
+		\draw[->] (SUNNONLINEARSOLVER.south) -- (nonlinearsolmodtitle.north);
+		\begin{scope}[on background layer]
+		\draw[fill=sunCyan,draw=black] ([xshift=-0.8cm]vectormodtitle.north west) rectangle (vectormodules.south east);
+		\draw[fill=sunCyan,draw=black] (matrixmodtitle.north west) rectangle ([xshift=0.4cm]matrixmodules.south east);
+		\draw[fill=sunCyan,draw=black] (matrixmodtitle.north west) rectangle ([xshift=0.4cm]matrixmodules.south east);
+		\draw[fill=sunCyan,draw=black] ([xshift=-0.65cm,yshift=0cm]linearsolmodtitle.north west) rectangle ([xshift=0.2cm,yshift=-0.2cm]lsmodules2.south east);
+		\draw[fill=sunCyan,draw=black] (nonlinearsolmodtitle.north west) rectangle ([xshift=1.3cm,yshift=-0.1cm]lsmodules3.south east);
+		\end{scope}
+	\end{tikzpicture}
+	\caption{High-level diagram of the sundials suite, the additions presented here are highlighted in red.}\label{fig:software_structure}
+	\end{fullfigure}
+
+	Furthermore, many of the solvers included in SUNDIALS require the solution of linear systems of algebraic equations. For this task we provide a suite of matrix--based Krylov solvers and preconditioners from a Package of Parallel  Multilevel Algebraic Domain  Decomposition and Multilevel Preconditioners (MLD2P4)~\cite{MR2738234}.
+
+	Our main objective is enabling the solution of nonlinear algebraic systems $F(\mathbf{x}) = 0$, for $\mathbf{x} \in \mathbf{R}^n$, by means of Newton--Krylov solvers. The rest of this documentation presents the extension of the KINSOL package~\cite{kinsolguide} NVECTOR, SUNMATRIX and SUNLINSOL API with the functionalities offered by PSBLAS/MLD2P4.
+		
+	\subsection{How to install}
+	
+	The first step for using these interfaces is to have a working version of both the PSBLAS and MLD2P4 library. The installation chain is therefore the following. As a first step you need to have all the auxiliary packages needed/suggested for the PSBLAS library, e.g., a local implementation of the BLAS library, the LAPACK library, METIS and AMD libraries. Then the development version from
+	\begin{center}
+		\url{https://github.com/sfilippone/psblas3}
+	\end{center}
+	can be cloned, and installed; please refer to its manual for the complete details on the install procedure. \attention If you want to compile KINSOL as a dynamic library it is necessary to pass the \lstinline|-fPic -ldl| flags to the PSBLAS configure. The next packages that you need to install is the package of extensions for PSBLAS from
+	\begin{center}
+		\url{https://github.com/sfilippone/psblas3-ext}.
+	\end{center}
+	The next step is then to install the suite of preconditioners, i.e., the MLD2P4 package. This packages has on its own a certain number of interfaces to other scientific libraries that are used to perform certain operation within it, e.g., the MUMPS, UMFPACK, SuperLU and SuperLUDist libraries. After the needed auxiliary packages have been installed, you need to install the library (again from the development branch) from
+	\begin{center}
+		\url{https://github.com/sfilippone/mld2p4-2}.
+	\end{center}
+
+	After all these operation have been completed, you can finally install the KINSOL-PSBLAS library from
+	\begin{center}
+		\url{https://github.com/Cirdans-Home/kinsol-psblas}.
+	\end{center}
+	The installation of this library uses CMake and requires the user to provide the location of the installation directories of PSBLAS, PSBLAS-EXT and MLD2P4-2 libraries.
+
+		
 	\section{The logic behind a PSBLAS instrumented application}
 	
 \marginlabel{
@@ -769,7 +914,7 @@ Specifically, the Krylov method included from the PSBLAS library are given in Ta
 	\end{description}
 	Each of this choices select the routines that work with the \lstinline[style=CStyle]|psb_c_dprec *ph| in the SUNLINSOL content and leaves \lstinline[style=CStyle]|mld_c_dprec *mh| a \lstinline[style=CStyle]|NULL| pointer.
 
-	The more elaborated \textit{multilevel} preconditioners are enable by setting \lstinline[style=CStyle]|ptype| to one of the following string
+	The more advanced preconditioners are enable by setting \lstinline[style=CStyle]|ptype| to one of the following string
 	\begin{description}
 %		\item[\textcolor{mPurple}{\texttt{"GS"}}] hybrid Gauss-Seidel (forward), that is, a global block Jacobi preconditioner with Gauss-Seidel as local solver on the blocks,
 %		\item[\textcolor{mPurple}{\texttt{"FBGS"}}] symmetrized hybrid Gauss-Seidel,that is, forward Gauss-Seidel followed by backward Gauss-Seidel.
