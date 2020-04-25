@@ -12,7 +12,7 @@
 # SUNDIALS Copyright End
 # ---------------------------------------------------------------
 # Find PSBLAS library.
-# 
+#
 
 IF(WIN32)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".dll")
@@ -29,14 +29,14 @@ unset(temp_PSBLAS_EXT_INCLUDE_DIR CACHE)
 if (PSBLAS_EXT_LIBRARY)
     # We have (or were given) PSBLAS_LIBRARY - get path to use for any related libs
     get_filename_component(PSBLAS_EXT_LIBRARY_DIR ${PSBLAS_EXT_LIBRARY} PATH)
-    
+
     # force CACHE update to show user DIR that will be used
     set(PSBLAS_EXT_LIBRARY_DIR ${PSBLAS_EXT_LIBRARY_DIR} CACHE PATH "" FORCE)
     MESSAGE(STATUS "Setting PSBLAS library dir to ${PSBLAS_EXT_LIBRARY}")
 else ()
     # find library with user provided directory path
     set(PSBLAS_EXT_LIBRARY_NAMES libpsb_ext.a)
-    find_library(PSBLAS_LIBRARY 
+    find_library(PSBLAS_EXT_LIBRARY 
       NAMES ${PSBLAS_EXT_LIBRARY_NAMES}
       PATHS ${PSBLAS_EXT_LIBRARY_DIR} NO_DEFAULT_PATH
       )

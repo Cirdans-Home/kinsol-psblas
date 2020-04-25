@@ -1182,7 +1182,7 @@ IF(MLD2P4_EXT_ENABLE)
   ENDIF(MLD2P4_EXT_FOUND)
 
   IF(MLD2P4_EXT_LIBRARIES AND NOT MLD2P4_EXT_FOUND)
-    PRINT_WARNING("PSBLAS-EXT not functional - support will not be provided"
+    PRINT_WARNING("MLD2P4-EXT not functional - support will not be provided"
                   "Double check spelling specified libraries (search is case sensitive)")
   ENDIF(MLD2P4_EXT_LIBRARIES AND NOT MLD2P4_EXT_FOUND)
 
@@ -1278,4 +1278,3 @@ INSTALL(
   FILES ${PROJECT_SOURCE_DIR}/NOTICE
   DESTINATION include/sundials
   )
-

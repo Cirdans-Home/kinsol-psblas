@@ -19,8 +19,8 @@ INSTALL(CODE "MESSAGE(\"\nInstall SUNMATRIX_PSBLAS\n\")")
 # installed by using CMake, this works as a patch for including the information
 # contained in the Make.inc files (Compile flags etc.), I know it is very
 # horrible indeed
-EXECUTE_PROCESS(COMMAND ./make2cmakeset.sh ${PSBLAS_INCLUDE_DIR} ${sundials_SOURCE_DIR}/src/nvector/psblas WORKING_DIRECTORY ${sundials_SOURCE_DIR}/src/nvector/psblas OUTPUT_QUIET ERROR_QUIET)
-INCLUDE(${sundials_SOURCE_DIR}/src/nvector/psblas/makeincinputcmake)
+EXECUTE_PROCESS(COMMAND ./make2cmakeset.sh ${PSBLAS_INCLUDE_DIR} ${sundials_SOURCE_DIR}/src/sunmatrix/psblas WORKING_DIRECTORY ${sundials_SOURCE_DIR}/src/sunmatrix/psblas OUTPUT_QUIET ERROR_QUIET)
+INCLUDE(${sundials_SOURCE_DIR}/src/sunmatrix/psblas/makeincinputcmake)
 
 IF(MPI_C_COMPILER)
   # use MPI wrapper as the compiler
