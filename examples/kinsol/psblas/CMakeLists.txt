@@ -103,7 +103,7 @@ FOREACH(example_tuple ${KINSOL_examples})
 
   # install example source and out files
   IF(EXAMPLES_INSTALL)
-    INSTALL(FILES ${example}.c ${example}.out
+    INSTALL(FILES ${example}.c ${example}.out kinsol.inp
       DESTINATION ${EXAMPLES_INSTALL_PATH}/kinsol/psblas)
   ENDIF()
 
