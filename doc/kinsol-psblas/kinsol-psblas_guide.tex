@@ -83,13 +83,13 @@
 	
 	\section{SUNDIALS KINSOL: Newton--Krylov Solvers}
 	
-	The original SUNDIALS library is a SUite of Nonlinear and DIfferential/ALgebraic equation Solvers.  It consists of the following six solvers: 
+	The original SUNDIALS library is a SUite of Nonlinear and DIfferential/ALgebraic equation Solvers.  It consists of the following six solvers:
 	\begin{itemize}
-		\item CVODE, solves initial value problems for ordinary differential equation (ODE) systems; 
-		\item CVODES, solves ODE systems and includes sensitivity analysis capabilities (forward and adjoint); 
-		\item ARKODE, solves initial value ODE problems with additive Runge-Kutta methods, include support for IMEX methods; 
-		\item IDA, solves initial value problems for differential-algebraic equation (DAE) systems; 
-		\item IDAS, solves DAE systems and includes sensitivity analysis capabilities (forward and adjoint); 
+		\item CVODE, solves initial value problems for ordinary differential equation (ODE) systems;
+		\item CVODES, solves ODE systems and includes sensitivity analysis capabilities (forward and adjoint);
+		\item ARKODE, solves initial value ODE problems with additive Runge-Kutta methods, include support for IMEX methods;
+		\item IDA, solves initial value problems for differential-algebraic equation (DAE) systems;
+		\item IDAS, solves DAE systems and includes sensitivity analysis capabilities (forward and adjoint);
 		\item KINSOL, solves nonlinear algebraic systems.
 	\end{itemize}
 	
@@ -188,7 +188,7 @@
 	\caption{High-level diagram of the sundials suite, the additions presented here are highlighted in red.}\label{fig:software_structure}
 	\end{fullfigure}
 
-	Furthermore, many of the solvers included in SUNDIALS require the solution of linear systems of algebraic equations. For this task we provide a suite of matrix--based Krylov solvers and preconditioners from a Package of Parallel  Multilevel Algebraic Domain  Decomposition and Multilevel Preconditioners (MLD2P4)~\cite{MR2738234}.
+	Furthermore, many of the solvers included in SUNDIALS require the solution of linear systems of algebraic equations. For this task we provide a suite of parallel matrix--based Krylov solvers and preconditioners from the Multilevel Domain Decomposition Parallel Preconditioners Packages based on PSBLAS (MLD2P4)~\cite{MR2738234}.
 
 	Our main objective is enabling the solution of nonlinear algebraic systems $F(\mathbf{x}) = 0$, for $\mathbf{x} \in \mathbf{R}^n$, by means of Newton--Krylov solvers. The rest of this documentation presents the extension of the KINSOL package~\cite{kinsolguide} NVECTOR, SUNMATRIX and SUNLINSOL API with the functionalities offered by PSBLAS/MLD2P4.
 		
