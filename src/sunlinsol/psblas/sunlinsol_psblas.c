@@ -38,7 +38,7 @@ extern "C" {
 
 
 /* Function used to create a PSBLAS linear solver */
-SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[]){
+SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[], psb_i_t ictxt){
 
   SUNLinearSolver S;
   SUNLinearSolver_Ops ops;
@@ -83,7 +83,7 @@ SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char
   content->options=options;
   content->cdh=NULL;
   content->ah=NULL;
-  content->ictxt=-1;
+  content->ictxt=ictxt;
   strcpy(content->methd,methd);
   strcpy(content->ptype,ptype);
   /* We need to decide here between a PSBLAS or an MLD2P4 preconditioner, this
@@ -118,6 +118,11 @@ SUNLinearSolver_Type SUNLinSolGetType_PSBLAS(SUNLinearSolver S)
 int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
 
   psb_i_t ret;
+  psb_i_t iam,np;
+
+  psb_c_info(LS_ICTXT_P(S),&iam,&np);
+
+  if(iam==0) printf("I'm initializing the %s solver with %s preconditioner\n",LS_METHD_P(S),LS_PTYPE_P(S));
 
   if(S == NULL) return(SUNLS_MEM_NULL);
 
@@ -126,13 +131,19 @@ int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
       strcmp(LS_PTYPE_P(S),"DIAG")==0 ){
       printf("\n\nPSBLAS init!\n\n");
       ret = psb_c_dprecinit(LS_ICTXT_P(S),LS_PREC_P(S),LS_PTYPE_P(S));
-      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+      if(ret != 0){
+        if(iam == 0) printf("Failure on PSBLAS precinit: %d\n",ret);
+        return(SUNLS_PSET_FAIL_UNREC);
+      }
   }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
     strcmp(LS_PTYPE_P(S),"GS") == 0 ||
     strcmp(LS_PTYPE_P(S),"AS") == 0 ||
     strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
       ret = mld_c_dprecinit(LS_ICTXT_P(S), LS_MLPREC_P(S), LS_PTYPE_P(S));
-      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+      if(ret != 0){
+        if(iam == 0) printf("Failure on MLD2P4 precinit: %d\n",ret);
+        return(SUNLS_PSET_FAIL_UNREC);
+      }
   }
   return(SUNLS_SUCCESS);
 }
@@ -141,13 +152,20 @@ int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
   /* In this function we perform all the initialization for the solver and for
   the preconditioner. */
   psb_i_t ret;
+  psb_i_t iam,np;
 
   if (S == NULL || A == NULL) return(SUNLS_MEM_NULL);
+  psb_c_info(LS_ICTXT_P(S),&iam,&np);
 
   // Use the information contained in A to setup the field in S
   LS_DESCRIPTOR_P(S) = SM_DESCRIPTOR_P(A);
   LS_PMAT_P(S)       = SM_PMAT_P(A);
-  LS_ICTXT_P(S)      = SM_ICTXT_P(A);
+  if( LS_ICTXT_P(S) != SM_ICTXT_P(A)){
+    printf("Working with different parallel context: this will never work.\n");
+  }
+
+  psb_c_info(LS_ICTXT_P(S),&iam,&np);
+  if(iam==0) printf("I'm building the %s preconditioner\n",LS_PTYPE_P(S));
 
   // The init routine depends on the fact that we are using PSBLAS or MLD2P4
   if( strcmp(LS_PTYPE_P(S),"NONE") == 0 ||

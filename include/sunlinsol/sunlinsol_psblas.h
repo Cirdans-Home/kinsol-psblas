@@ -87,7 +87,7 @@ typedef struct _SUNLinearSolverContent_PSBLAS *SUNLinearSolverContent_PSBLAS;
 /* ---------------------------------------
  * Exported Functions for SUNLINSOL_PSBLAS
  * --------------------------------------- */
-SUNDIALS_EXPORT SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[]);
+SUNDIALS_EXPORT SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[], psb_i_t ictxt);
 /* Core Functions */
 SUNDIALS_EXPORT SUNLinearSolver_Type SUNLinSolGetType_PSBLAS(SUNLinearSolver S);
 SUNDIALS_EXPORT int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S);

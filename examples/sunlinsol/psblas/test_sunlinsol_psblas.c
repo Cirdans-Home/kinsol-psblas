@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
   options.itrace = 1;
   options.istop  = istop;
   /* Create PSBLAS/MLD2P4 linear solver */
-  LS = SUNLinSol_PSBLAS(options, methd, ptype);
+  LS = SUNLinSol_PSBLAS(options, methd, ptype, ictxt);
   SUNLinSolInitialize(LS);
   SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
   SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
