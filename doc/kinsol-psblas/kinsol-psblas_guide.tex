@@ -13,6 +13,7 @@
 \usepackage{booktabs}
 \usepackage{tikz}
 \usetikzlibrary{positioning,shapes,shadows,arrows,matrix,backgrounds}
+\newcommand{\stencilpt}[4][]{\node[circle,fill,draw,inner sep=1.5pt,label={above:#4},#1] at (#2) (#3) {}}
 
 \usepackage{array,lipsum}
 
@@ -1079,6 +1080,85 @@ SUNLinSolSolve_PSBLAS(LS, A, x, b, tol);
 \end{lstlisting}
 
 The example given in the code~\ref{lst:thesolution}, initializes a linear solver requesting for a Conjugate Gradient method (\lstinline[style=CStyle]|"CG"|), preconditioned by a multi-level preconditioner (\lstinline[style=CStyle]|"ML"|). Then, after the initialization step, some of the properties of the multigrid cycle are selected. Specifically, we decide to use two smoother sweeps of Block-Jacobi with an ILU(1) subsolver (\lstinline[style=CStyle]|"SUB_FILLIN"|), and set again a Block-Jacobi method as coarse solver (\lstinline[style=CStyle]|"COARSE_SUBSOLVE"|) that uses instead as solver for the blocks and ILU(0) (\lstinline[style=CStyle]|"COARSE_FILLIN"|) factorization. Then a setup step is performed, during this step the multigrid hierarchy is assembled. Finally the solution of the linear system is computed by a call to \lstinline[style=CStyle]|SUNLinSolSolve_PSBLAS|. Observe that if we have put the value \lstinline[style=CStyle]|options.itrace = 1;| the solve routine will print convergence information for each iteration.
+
+\section{A complete KINSOL-PSBLAS tutorial}
+
+We consider here a complete example of usage for the KINSOL package with PSBLAS linear algebra and iterative solver routines. Our interest in having a Newton-Krylov solver is mostly related to the task of approximating the solution of nonlinear differential problems. To illustrate the functionalities we have introduced for the KINSOL package we focus on the solution of a model semilinear elliptic partial differential equation in two dimensions, via a finite-difference method.
+
+To arrive at the PDE we wish to solve, we start by considering the problem we are interested in we start by considering the problem of minimizing the energy functional 
+\begin{equation}\label{eq:functional}
+\mathfrak{J}(u) = \int_{\Omega} \left( \frac{\varepsilon^2}{2} |\nabla u|^2 + g(u) \right), \qquad \Omega = [0,1]^2, \qquad g \in \mathcal{C}^\infty(\mathbb{R}),
+\end{equation}
+over a class of admissible \emph{smooth} functions $V$ vanishing on the boundary of the unitary square $\partial\Omega$, i.e., of finding
+\begin{equation*}
+u = \arg\min_{u \in V} \mathfrak{J}(u).
+\end{equation*}
+Smooth critical points for~\eqref{eq:functional} satisfy the Euler--Lagrange equation
+\begin{equation}\label{eq:nonlinear_model}
+\begin{cases}
+-\varepsilon^2 \nabla^2 u - g'(u) = 0, &  \mathbf{x} \in \Omega. \\
+u = 0, & \mathbf{x} \in \partial \Omega.
+\end{cases}
+\end{equation}
+
+To have a closed--form solution to use for comparing the error we consider its forced version
+\begin{equation}\label{eq:forced_equation}
+\begin{cases}
+-\varepsilon^2 \nabla^2 u - g'(u) = f, &  \mathbf{x} \in \Omega. \\
+u = 0, & \mathbf{x} \in \partial \Omega.
+\end{cases}
+\end{equation}
+with
+\begin{equation*}
+\begin{split}
+g' = & u - u^3,\\
+f = & e^{-3/\epsilon } \left(4096 \sinh ^3\left(\frac{x-1}{2 \epsilon }\right) \sinh ^3\left(\frac{x}{2 \epsilon }\right) \sinh ^3\left(\frac{y-1}{2 \epsilon }\right) \sinh ^3\left(\frac{y}{2 \epsilon }\right) \right. \\ & \left. -2 e^{2/\epsilon } \left(3 \cosh \left(\frac{x-y}{\epsilon }\right)+3 \cosh \left(\frac{x+y-1}{\epsilon }\right)-2 \cosh \left(\frac{1-x}{\epsilon }\right) \right. \right. \\ & \left. \left. -2 \cosh \left(\frac{x}{\epsilon }\right)-2 \cosh \left(\frac{1-y}{\epsilon }\right)-2 \cosh \left(\frac{y}{\epsilon }\right)+\cosh \left(\frac{1}{\epsilon }\right)+1\right)\right);
+\end{split}
+\end{equation*}
+so that the function
+\begin{equation*}
+u = \psi(x)\psi/y), 
+\end{equation*}
+is a solution, for
+\begin{equation*}
+\psi (t) = -\exp \left(\frac{t-1}{\epsilon }\right)-\exp \left(-\frac{t}{\epsilon }\right)+\exp \left(-\frac{1}{\epsilon }\right)+1.
+\end{equation*}
+Before turning to the implementation, we write down the finite difference formulation of~\eqref{eq:forced_equation}.  Let us consider the uniform Cartesian grid $\{(x_i = (i-1)h,y_j = (j-1)h)\}_{i,j=0}^{n+1}$ on the unit square for $h=1/(n+1)$. For the discretization of the Laplace operator in~\eqref{eq:nonlinear_model} we consider its finite difference approximation on the grid $\{(x_i,y_j)\}$ with a five point stencil\marginlabel{\begin{tikzpicture}
+	\stencilpt{-1,0}{i-1}{$u_{i-1,j}$};
+	\stencilpt{ 0,0}{i}  {$4 u_{i,j}$};
+	\stencilpt{ 1,0}{i+1}{$u_{i+1,j}$};
+	\stencilpt{0,-1}{j-1}{$u_{i,j-1}$};
+	\stencilpt{0, 1}{j+1}{$u_{i,j+1}$};
+	\draw 	(j-1) -- (i)
+	(i)   -- (j+1)
+	(i-1) -- (i)
+	(i)   -- (i+1);
+	\end{tikzpicture}}, i.e., for $i,j=2,\ldots,n-1$,
+\begin{equation*}
+\nabla^2_h u_{i,j} = \frac{4 u_{i,j} - u_{i-1,j} - u_{i,j-1} - u_{i+1,j} - u_{i,j+1} }{h^2} + O(h^2).
+\end{equation*}
+We can then express the the vector algebraic function whose zero approximates the solution to the minimization problem for~\eqref{eq:functional} as 
+\begin{equation}\label{eq:zerotobe}
+	F(\mathbf{u}) = \varepsilon^2 A \mathbf{u} - \mathbf{u} + \mathbf{u}^3 - \mathbf{f} = 0.
+\end{equation}
+Then, the (generic) Newton iteration for this problem reads as 
+\begin{itemize}
+	\item Given an initial guess $\mathbf{u}_0 = [1,1,\ldots,1]^T$,
+	\item For $k=1,2,\ldots$ until convergence (or maximum allotted iterations)
+	\begin{itemize}
+		\item Solve for $J_F( \mathbf{u}_k ) \mathbf{d}_k = - F( \mathbf{u}_k )$,
+		\item Update our guess $\mathbf{u}_{k+1} = \mathbf{u}_k + \lambda_k \mathbf{d}_k$.
+	\end{itemize}
+\end{itemize}
+Where $J_F(\mathbf{u}) = F'(\mathbf{u})$ is the system Jacobian. The ``generality'' is inherent to a certain number of choices regarding the computation of the step--size $\lambda_k$, the update rate for the Jacobian, and so on. This part of the library has not been modified, so we refer back to \cite[Chapter~4]{kinsolguide}, and focus instead on the construction of the objects and the routines needed for launching the KINSOL module.
+
+Before, entering into the details regarding the implementation, we compute also a closed form expression of the Jacobian $J_F(\mathbf{c})$ for~\eqref{eq:zerotobe}, that reads
+\begin{equation}\label{eq:jacobian}
+J_F(\mathbf{u}) = \varepsilon^2 A -I +3\operatorname{diag}(\mathbf{u}^2).
+\end{equation}
+
+
+
 
 \appendix
 
