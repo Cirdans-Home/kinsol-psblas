@@ -132,7 +132,7 @@ int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
       printf("\n\nPSBLAS init!\n\n");
       ret = psb_c_dprecinit(LS_ICTXT_P(S),LS_PREC_P(S),LS_PTYPE_P(S));
       if(ret != 0){
-        if(iam == 0) printf("Failure on PSBLAS precinit: %d\n",ret);
+        if(iam == 0) printf("Failure on PSBLAS precinit %d ictxt %d ptype %s\n",ret,LS_ICTXT_P(S),LS_PTYPE_P(S));
         return(SUNLS_PSET_FAIL_UNREC);
       }
   }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
@@ -141,7 +141,7 @@ int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
     strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
       ret = mld_c_dprecinit(LS_ICTXT_P(S), LS_MLPREC_P(S), LS_PTYPE_P(S));
       if(ret != 0){
-        if(iam == 0) printf("Failure on MLD2P4 precinit: %d\n",ret);
+        if(iam == 0) printf("Failure on MLD2P4 precinit %d ictxt %d ptype %s\n",ret,LS_ICTXT_P(S),LS_PTYPE_P(S));
         return(SUNLS_PSET_FAIL_UNREC);
       }
   }
