@@ -19,7 +19,7 @@
 
 # Examples using SUNDIALS linear solvers
 SET(KINSOL_examples
-  "kinFoodWeb_kry_psblas\;1\;4\;develop"
+  "GinzburgLandau\;<\;kinsol.inp"
   )
 
 # Dependencies for kinsol examples
@@ -76,8 +76,6 @@ FOREACH(example_tuple ${KINSOL_examples})
   # parse the example tuple
   LIST(GET example_tuple 0 example)
   LIST(GET example_tuple 1 number_of_nodes)
-  LIST(GET example_tuple 2 number_of_tasks)
-  LIST(GET example_tuple 3 example_type)
 
   # example source files
   ADD_EXECUTABLE(${example} ${example}.c
@@ -123,6 +121,7 @@ IF(EXAMPLES_INSTALL)
   # Prepare substitution variables for Makefile and/or CMakeLists templates
   SET(SOLVER "KINSOL")
   SET(SOLVER_LIB "sundials_kinsol")
+	SET(LIBS "-lsundials_sunlinsolpsblas")
 
   EXAMPLES2STRING(KINSOL_examples EXAMPLES)
   EXAMPLES2STRING(kinsol_psblas_dependencies EXAMPLES_DEPENDENCIES)
