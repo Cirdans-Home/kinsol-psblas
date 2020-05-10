@@ -613,13 +613,11 @@ otherwise returns false */
 }
 
 booleantype N_VConstrMask_PSBLAS(N_Vector c, N_Vector x, N_Vector m){
-  bool *t;
+  bool t;
 
-  t = (bool *) malloc(sizeof(bool));
+  psb_c_dmask(NV_PVEC_P(c),NV_PVEC_P(x),NV_PVEC_P(m), &t, NV_DESCRIPTOR_P(x));
 
-  psb_c_dmask(NV_PVEC_P(c),NV_PVEC_P(x),NV_PVEC_P(m), t, NV_DESCRIPTOR_P(x));
-
-  if( *t == 0){
+  if( t == 0){
     return(SUNFALSE);
   }else{
     return(SUNTRUE);
