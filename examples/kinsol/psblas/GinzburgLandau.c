@@ -24,6 +24,7 @@
 
  #include <stdio.h>
  #include <stdlib.h>
+ #include <string.h>
  #include <math.h>
  #include <psb_util_cbind.h>
 
@@ -110,7 +111,7 @@ struct user_data_for_f {
    /* Problem datas */
    N_Vector     u,fvec,constraints,sc,err,utrue;
    SUNMatrix    LAP,J;
-   psb_d_t      deltah,deltah2,sqdeltah,x,y,zt[nb],ut[nb];
+   psb_d_t      deltah,deltah2,sqdeltah,x,y,zt[nb],ut[nb],errorvalue;
    psb_d_t      *val, epsilon, *valj;
    psb_l_t      *irow,*icol,*localvecindex;
    psb_i_t      icoeff,ilocalvec;
@@ -124,13 +125,13 @@ struct user_data_for_f {
    double      t1,t2;
    /* Input parameters */
    char methd[20],ptype[20];                /* Solve method and type     */
-   char afmt[8];
-   psb_i_t nparms;
+   char afmt[8],dump[1];
+   psb_i_t nparms,dumpflag;
    psb_i_t idim,istop,itmax,itrace,irst,newtonmaxit;
    double          tol;                     /* tolerance for LS solution  */
    double  fnormtol, scsteptol;
 
-   int globalstrategy = KIN_NONE;           /* Set global strategy flag */
+   int globalstrategy = KIN_NONE;     /* Set global strategy flag */
 
    /* Get processor number and total number of processes */
    ictxt = psb_c_init();
@@ -155,6 +156,8 @@ struct user_data_for_f {
      get_iparm(stdin,&newtonmaxit);
      get_dparm(stdin,&fnormtol);
      get_dparm(stdin,&scsteptol);
+     get_hparm(stdin,dump);
+     dumpflag = strcmp(dump,"T");
    }
    /* Now broadcast the values, and check they're OK */
    psb_c_ibcast(ictxt,1,&nparms,0);
@@ -170,12 +173,28 @@ struct user_data_for_f {
    psb_c_ibcast(ictxt,1,&newtonmaxit,0);
    psb_c_dbcast(ictxt,1,&fnormtol,0);
    psb_c_dbcast(ictxt,1,&scsteptol,0);
+   psb_c_ibcast(ictxt,1,&dumpflag,0);
 
    if(iam == 0){
      printf("\n\nWelcome to the GinzburgLandau Test Program for KINSOL-PSBLAS\n\n");
    }
 
    epsilon = (psb_d_t) 1.0;
+
+   /*-------------------------------------------------------------------------*
+    * Information on the test Problem                                         *
+    *-------------------------------------------------------------------------*/
+    if(iam == 0){
+      printf("Solver:\t%s\n",methd);
+      printf("Precondiitioner:\t%s\n",ptype);
+      printf("A format:\t\t%s\n",afmt);
+      printf("Problem size:\t%d x %d\n",idim,idim);
+      printf("The problem is running on %d processors\n",np);
+      printf("\n\n");
+    }
+
+
+
    /* Initialize array descriptor and sparse matrix storage by using a simple
     * BLOCK DISTRIBUTION of the data */
    cdh = psb_c_new_descriptor();
@@ -376,18 +395,18 @@ struct user_data_for_f {
         }
       }
       info = SUNMatIns_PSBLAS(icoeff,irow,icol,val,LAP);
+      info = SUNMatIns_PSBLAS(icoeff,irow,icol,val,J);
       if(info != 0) printf("%d Error in SUNMatIns! %d\n",iam,info);
       icoeff = 0;
       for(int jj=ii; jj < ii+ib; jj++){
         localvecindex[icoeff] = myidx[jj]-1;
-        valj[icoeff] = 0.0;
+        valj[icoeff] = 1.0;
         icoeff++;
       }
       info = psb_c_dgeins(ib,localvecindex,zt,NV_PVEC_P(fvec),NV_DESCRIPTOR_P(fvec));
       if(info != 0) printf("%d Error in dgeins! %d\n",iam,info);
       info = psb_c_dgeins(ib,localvecindex,ut,NV_PVEC_P(utrue),NV_DESCRIPTOR_P(utrue));
       if(info != 0) printf("%d Error in dgeins! %d\n",iam,info);
-      info = SUNMatIns_PSBLAS(ib,localvecindex,localvecindex,valj,J);
       if(info != 0) printf("%d Error in SUNMatIns! %d\n",iam,info);
       free(localvecindex);
     }
@@ -395,15 +414,11 @@ struct user_data_for_f {
     psb_c_cdasb(cdh);
     N_VConst(0.0,constraints);
     N_VConst(1.0,u);
-    N_VConst(1/deltah,sc);
+    N_VConst(1.0/sqdeltah,sc);
     N_VAsb_PSBLAS(fvec);
     SUNMatAsb_PSBLAS(J);
     SUNMatAsb_PSBLAS(LAP);
 
-    SUNMatCopy_PSBLAS(LAP,J);
-    SUNPSBLASMatrix_Print(LAP, "Laplacian matrix", "Laplacian.mtx");
-    psb_c_dspaxpby(1.0,SM_PMAT_P(LAP),1.0,SM_PMAT_P(J),SM_DESCRIPTOR_P(LAP));
-    SUNPSBLASMatrix_Print(J, "J tentative", "JacobianTentative.mtx");
     /* We put the precomputed parts in the auxiliary data structure, this will
        be used to make both nonlinear function evaluations and Jacobian
        evaluations */
@@ -414,7 +429,6 @@ struct user_data_for_f {
     user_data.sqdeltah = sqdeltah;
     user_data.epsilon  = epsilon;
 
-
     /* Call KINCreate/KINInit to initialize KINSOL:
        nvSpec is the nvSpec pointer used in the parallel version
        A pointer to KINSOL problem memory is returned and stored in kmem. */
@@ -423,6 +437,8 @@ struct user_data_for_f {
     if (check_flag(&info, "KINInit", 1, iam)) psb_c_abort(ictxt);
     info = KINSetNumMaxIters(kmem, newtonmaxit);
     if (check_flag(&info, "KINSetNumMaxIters", 1, iam)) psb_c_abort(ictxt);
+    info = KINSetPrintLevel(kmem, 0);
+    if (check_flag(&info, "KINSetPrintLevel", 1, iam)) psb_c_abort(ictxt);
     info = KINSetUserData(kmem, &user_data);
     if (check_flag(&info, "KINSetUserData", 1, iam)) psb_c_abort(ictxt);
     info = KINSetConstraints(kmem, constraints);
@@ -447,43 +463,67 @@ struct user_data_for_f {
     LS = SUNLinSol_PSBLAS(options, methd, ptype, ictxt);
     if(check_flag((void *)LS, "SUNLinSol_PSBLAS", 0, iam)) psb_c_abort(ictxt);
 
-    SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
-    SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
-    SUNLinSolSetc_PSBLAS(LS,"COARSE_SOLVE","BJAC");
-    SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
-    SUNLinSolSeti_PSBLAS(LS,"COARSE_FILLIN",0);
+    SUNLinSolInitialize_PSBLAS(LS);
+    info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
+    if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
+    info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
+    if (check_flag(&info, "SUB_FILLIN", 1, iam)) psb_c_abort(ictxt);
+    info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SOLVE","BJAC");
+    if (check_flag(&info, "COARSE_SOLVE", 1, iam)) psb_c_abort(ictxt);
+    info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
+    if (check_flag(&info, "COARSE_SUBSOLVE", 1, iam)) psb_c_abort(ictxt);
 
-    /* Attach the linear solver to KINSOL */
+    /* Attach the linear solver to KINSOL and set its options */
     info = KINSetLinearSolver(kmem, LS, J);
     if (check_flag(&info, "KINSetLinearSolver", 1, iam)) psb_c_abort(ictxt);
     info = KINSetJacFn(kmem,jac);
     if (check_flag(&info, "KINSetJacFn", 1, iam)) psb_c_abort(ictxt);
+    info = KINSetEtaForm(kmem,KIN_ETACONSTANT);
+    if (check_flag(&info, "KINSetEtaForm", 1, iam)) psb_c_abort(ictxt);
+    info = KINSetEtaConstValue(kmem,options.eps);
+    if (check_flag(&info, "KINSetEtaConstValue", 1, iam)) psb_c_abort(ictxt);
+
 
     /* Call KINSol and print output concentration profile */
     info = KINSol(kmem,           /* KINSol memory block */
                   u,              /* initial guess on input; solution vector */
                   globalstrategy, /* global strategy choice */
-                  sc,             /* scaling vector for the variable cc */
+                  sc,    /* scaling vector for the variable u */
                   sc);            /* scaling vector for function values fval */
 
     if (check_flag(&info, "KINSol", 1, iam)) psb_c_abort(ictxt);
 
     N_VLinearSum((psb_d_t) 1.0, u, (psb_d_t) -1.0, utrue, err);
-
-    if(iam == 0) printf("\n\nProgram terminated with error %1.3e\n\n",
-      psb_c_dgenrm2(NV_PVEC_P(err),NV_DESCRIPTOR_P(err)));
+    errorvalue = psb_c_dgenrm2(NV_PVEC_P(err),NV_DESCRIPTOR_P(err));
+    if(iam == 0) printf("\n\nProgram terminated with error %1.3e\n\n",errorvalue);
 
     if(iam == 0) PrintFinalStats(kmem);
 
-    FILE *fid;
-    fid = fopen("solution.dat","w+");
-    N_VPrintFile_PSBLAS(u, fid);
-    fclose(fid);
+    /* Print solution */
+    if(dumpflag == 0){
+      FILE *fid;
+      char filename[20];
+      sprintf(filename,"solution-%d.dat",iam);
+      fid = fopen(filename,"w+");
+      for(int i = 0; i < nlr; i++)
+        fprintf(fid,"%1.16f\n",N_VGetArrayPointer_PSBLAS(u)[i]);
+      fclose(fid);
+    }
+    /* Free the Memory */
+    KINFree(&kmem);
+    N_VDestroy(u);
+    N_VDestroy(fvec);
+    N_VDestroy(sc);
+    N_VDestroy(err);
+    N_VDestroy(utrue);
+    SUNMatDestroy(LAP);
+    SUNMatDestroy(J);
+    SUNLinSolFree(LS);
 
-   free(cdh);
-   psb_c_exit(ictxt);
+    free(cdh);
+    psb_c_exit(ictxt);
 
-   return(0);
+    return(0);
 }
 
 /*
@@ -493,24 +533,22 @@ struct user_data_for_f {
 */
 static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
 {
-  struct user_data_for_f *input = user_data;  // C-Magic
+
+  struct user_data_for_f *input = user_data;
   N_Vector cc;
-  cc = N_VClone_PSBLAS(u);
-  N_VLinearSum( (psb_d_t) 1.0,u,(psb_d_t) 0.0,cc,cc);
-
-  SUNMatMatvec_PSBLAS( *input->A, cc, fval ); // fval <- -epsilon^2 \Nabla^2 cc
-  N_VLinearSum_PSBLAS( (psb_d_t) -1.0, *input->f, (psb_d_t) 1.0, fval, fval);
-  N_VLinearSum_PSBLAS( (psb_d_t) -1.0, cc, (psb_d_t) 1.0, fval, fval);
-  N_VProd_PSBLAS(cc,cc,cc);
-  N_VProd_PSBLAS(cc,cc,cc);
-  N_VLinearSum_PSBLAS( (psb_d_t) +1.0, cc, (psb_d_t) 1.0, fval, fval);
-
+  cc = N_VNew_PSBLAS(NV_ICTXT_P(u),NV_DESCRIPTOR_P(u));
+  N_VAsb_PSBLAS(cc);
   N_VAsb_PSBLAS(fval);
+  N_VLinearSum( (psb_d_t) 1.0,u,(psb_d_t) 0.0,cc,cc);     // cc <- u
+  // F(u) = -epsilon^2*A*u - u -f + u^3
+  SUNMatMatvec_PSBLAS( *input->A, cc, fval );             // fval <- Lap cc
+  N_VLinearSum_PSBLAS( (psb_d_t) -1.0, *input->f, (psb_d_t) 1.0, fval, fval); // fval = fval - f
+  N_VLinearSum_PSBLAS( (psb_d_t) -1.0, cc, (psb_d_t) 1.0, fval, fval);        // fval = fval - cc
+  N_VProd_PSBLAS(cc,u,cc);                       // cc^2 = cc.*u
+  N_VProd_PSBLAS(cc,u,cc);                       // cc^3 = u.*cc^2
+  N_VLinearSum_PSBLAS( (psb_d_t) +1.0, cc, (psb_d_t) 1.0, fval, fval);        // fval = fval - cc^3
 
-  FILE *fid;
-  fid = fopen("fval.dat","w+");
-  N_VPrintFile_PSBLAS(fval,fid);
-  fclose(fid);
+  N_VDestroy(cc);
 
   return(0);
 }
@@ -531,7 +569,11 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
 
   // Who are we?
   psb_c_info(SM_ICTXT_P(J),&iam,&np);
-  if(iam == 0) printf("\tBuilding a new Jacobian...\n");
+  if(iam == 0){
+    printf("\tBuilding a new Jacobian\n");
+    printf("\tSize of the grid %d x %d\n",sizes[0],sizes[1]);
+    printf("\tepsilon = %1.2e deltah = %1.2e\n",epsilon,sqdeltah);
+  }
   SUNMatZero(J); // We put to zero the old Jacobian to reuse the structure
 
   nlr = psb_c_cd_get_local_rows(SM_DESCRIPTOR_P(J));
@@ -581,7 +623,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
      }
      // term depending on     (x,y)
        val[icoeff]  = ( (psb_d_t) 2.0 )*(d(x,y,epsilon) + d(x,y,epsilon))/sqdeltah
-                -1.0 + 3.0*pow((N_VGetArrayPointer_PSBLAS(yvec))[icoeff],2);
+                -((psb_d_t) 1.0) + ((psb_d_t) 3.0)*pow((N_VGetArrayPointer_PSBLAS(yvec))[i],2.0);
        icol[icoeff] = psb_c_l_ijk2idx(ijk,sizes,modes,base);
        irow[icoeff] = glob_row;
        icoeff       = icoeff + 1;
@@ -613,6 +655,15 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
    }
 
    SUNMatAsb_PSBLAS(J);
+   if(iam == 0){
+     printf("\tBuilding phase completed\n");
+   }
+
+   /* Free the Memory for the Auxiliary Array */
+   free(val);
+   free(irow);
+   free(icol);
+   free(myidx);
 
   return(0);
 }
@@ -683,6 +734,7 @@ static int check_flag(void *flagvalue, const char *funcname, int opt, int id)
 static void PrintFinalStats(void *kmem)
 {
   long int nni, nfe, nli, npe, nps, ncfl, nfeSG;
+  psb_d_t funcnorm;
   int flag;
 
   flag = KINGetNumNonlinSolvIters(kmem, &nni);
@@ -699,10 +751,11 @@ static void PrintFinalStats(void *kmem)
   check_flag(&flag, "KINGetNumLinConvFails", 1, 0);
   flag = KINGetNumLinFuncEvals(kmem, &nfeSG);
   check_flag(&flag, "KINGetNumLinFuncEvals", 1, 0);
+  flag = KINGetFuncNorm(kmem, &funcnorm);
+  check_flag(&flag, "KINGetFuncNorm", 1, 0);
 
-  printf("Final Statistics.. \n");
+  printf("\n\nFinal Statistics\n");
   printf("nni    = %5ld    nli   = %5ld\n", nni, nli);
   printf("nfe    = %5ld    nfeSG = %5ld\n", nfe, nfeSG);
   printf("nps    = %5ld    npe   = %5ld     ncfl  = %5ld\n", nps, npe, ncfl);
-
 }
