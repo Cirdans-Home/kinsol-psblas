@@ -129,7 +129,7 @@ int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
   if( strcmp(LS_PTYPE_P(S),"NONE")==0 ||
       strcmp(LS_PTYPE_P(S),"BJAC")==0 ||
       strcmp(LS_PTYPE_P(S),"DIAG")==0 ){
-      printf("\n\nPSBLAS init!\n\n");
+      if(iam==0) printf("\tInit of a PSBLAS preconditioner\n");
       ret = psb_c_dprecinit(LS_ICTXT_P(S),LS_PREC_P(S),LS_PTYPE_P(S));
       if(ret != 0){
         if(iam == 0) printf("Failure on PSBLAS precinit %d ictxt %d ptype %s\n",ret,LS_ICTXT_P(S),LS_PTYPE_P(S));
@@ -139,12 +139,15 @@ int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S){
     strcmp(LS_PTYPE_P(S),"GS") == 0 ||
     strcmp(LS_PTYPE_P(S),"AS") == 0 ||
     strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
+      if(iam==0) printf("\tInit of a MLD2P4 preconditioner\n");
       ret = mld_c_dprecinit(LS_ICTXT_P(S), LS_MLPREC_P(S), LS_PTYPE_P(S));
       if(ret != 0){
         if(iam == 0) printf("Failure on MLD2P4 precinit %d ictxt %d ptype %s\n",ret,LS_ICTXT_P(S),LS_PTYPE_P(S));
         return(SUNLS_PSET_FAIL_UNREC);
       }
   }
+  if(iam==0) printf("The %s solver with %s preconditioner has been initialized\n",LS_METHD_P(S),LS_PTYPE_P(S));
+
   return(SUNLS_SUCCESS);
 }
 
@@ -165,7 +168,7 @@ int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
   }
 
   psb_c_info(LS_ICTXT_P(S),&iam,&np);
-  if(iam==0) printf("I'm building the %s preconditioner\n",LS_PTYPE_P(S));
+  if(iam==0) printf("\n\tI'm building the %s preconditioner\n",LS_PTYPE_P(S));
 
   // The init routine depends on the fact that we are using PSBLAS or MLD2P4
   if( strcmp(LS_PTYPE_P(S),"NONE") == 0 ||
@@ -182,7 +185,9 @@ int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
       ret = mld_c_dsmoothers_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
       if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
   }
-
+  /* Print out information on the preconditioner */
+  if(strcmp(LS_PTYPE_P(S),"ML") == 0) mld_c_ddescr(LS_MLPREC_P(S));
+  if(iam==0) printf("\tBuilding phase of the preconditioner completed\n\n");
   return(SUNLS_SUCCESS);
 
 
@@ -231,7 +236,12 @@ int SUNLinSolFree_PSBLAS(SUNLinearSolver S){
   various part of the solver: the communicator and the matrix are still there,
   they should be freed after the matrix has been destroyed */
 
+  psb_i_t iam,np;
+
   if (S == NULL) return(SUNLS_SUCCESS);
+
+  psb_c_info(LS_ICTXT_P(S),&iam,&np);
+  if(iam == 0) printf("\n\tI'm freeing the %s solver with %s preconditioner\n",LS_METHD_P(S),LS_PTYPE_P(S));
 
   /* delete the preconditioner item from within the content structure */
   if( strcmp(LS_PTYPE_P(S),"NONE") == 0 ||
