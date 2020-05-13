@@ -98,16 +98,16 @@ struct user_data_for_f {
   *------------------------------------------------*/
  int main(int argc, char *argv[]){
 
-   psb_i_t      ictxt;                      /* PSBLAS Context            */
-   MPI_Comm     comm;											 /* MPI Comminicator          */
-   psb_i_t      np, iam;                    /* Number of procs, proc id  */
-   psb_c_descriptor *cdh;                   /* PSBLAS Descriptor         */
-   const psb_i_t base = 0;                  /* We use base = 0 for C ind.*/
-   const psb_i_t modes = 2;                 /* Number of dimensions      */
-   SUNLinearSolver LS;                      /* linear solver object      */
-   psb_c_SolverOptions options;             /* Solver options            */
-   void *kmem;                              /* Pointer to KINSOL memory  */
-   struct user_data_for_f user_data;        /* User data for computing F */
+   psb_i_t      ictxt;                      /* PSBLAS Context              */
+   MPI_Comm     comm;											 /* MPI Comminicator             */
+   psb_i_t      np, iam;                    /* Number of procs, proc id    */
+   psb_c_descriptor *cdh;                   /* PSBLAS Descriptor           */
+   const psb_i_t base = 0;                  /* We use base = 0 for C ind.  */
+   const psb_i_t modes = 2;                 /* Number of dimensions        */
+   SUNLinearSolver LS;                      /* linear solver object        */
+   psb_c_SolverOptions options;             /* Solver options              */
+   void *kmem;                              /* Pointer to KINSOL memory    */
+   struct user_data_for_f user_data;        /* User data for computing F,J */
    /* Problem datas */
    N_Vector     u,fvec,constraints,sc,err,utrue;
    SUNMatrix    LAP,J;
@@ -415,6 +415,7 @@ struct user_data_for_f {
     N_VConst(0.0,constraints);
     N_VConst(1.0,u);
     N_VConst(1.0/sqdeltah,sc);
+    N_VAsb_PSBLAS(utrue);
     N_VAsb_PSBLAS(fvec);
     SUNMatAsb_PSBLAS(J);
     SUNMatAsb_PSBLAS(LAP);
@@ -430,7 +431,6 @@ struct user_data_for_f {
     user_data.epsilon  = epsilon;
 
     /* Call KINCreate/KINInit to initialize KINSOL:
-       nvSpec is the nvSpec pointer used in the parallel version
        A pointer to KINSOL problem memory is returned and stored in kmem. */
     kmem = KINCreate();
     info = KINInit(kmem, funcprpr, u);
