@@ -957,7 +957,7 @@ The following macros are provided to access the content of a SUNLINSOL\_PSBLAS l
 
 \subsection{SUNLINSOL\_PSBLAS functions}
 
-The SUNLINSOL\_PSBLAS implementation provides PSBLAS implementations of all the linear solver operations listed in KINSOL library~\cite[Section~8.1.1]{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed there by appending the suffix \texttt{\_PSBLAS}. The SUNLINSOL\_PSBLAS implementation provides the following additional user--callable routines that can be used to set-up the values for the \lstinline[style=CStyle]|ptype="ML"| preconditioners.
+The SUNLINSOL\_PSBLAS implementation provides PSBLAS implementations of all the linear solver operations listed in KINSOL library~\cite[Section~8.1.1]{kinsolguide}. Following the standard nomenclature of the SUNDIALS library, their names are obtained from the ones listed there by appending the suffix \texttt{\_PSBLAS}. The SUNLINSOL\_PSBLAS implementation provides the following additional user--callable routines that can be used to set-up the values for the \lstinline[style=CStyle]|ptype="ML"| preconditioners. \attention All these calls make sense only after the initialization of the preconditioner by a call to \texttt{SUNLinSolInitialize\_PSBLAS}; see the next subsection. 
 
 \begin{description}
 \item[\fbox{\texttt{SUNLinSolSeti\_PSBLAS}}] given a linear solver with \lstinline[style=CStyle]|ptype="ML"| this routine set the option \lstinline[style=CStyle]|const char *what| to the given integer value
@@ -979,9 +979,9 @@ The detail of the options for the various solver are recalled in Section~\ref{se
 
 \begin{description}
 
-\item[\fbox{\texttt{SUNLinSol\_PSBLAS}}] Only the solver options are set at this stage, all the information regarding the communicator, the PSBLAS contex are imported from the matrix when the solver is initialized. The setup of the preconditioner has to be done with the \lstinline[style=CStyle]|SUNLinSolSetup_PSBLAS| routine. Here the codes decide only if we are using a PSBLAS or an MLD2P4 preconditioner by looking at the string char \lstinline[style=CStyle]|ptype[]|.
+\item[\fbox{\texttt{SUNLinSol\_PSBLAS}}] Only the solver options are set at this stage, all the information regarding the communicator, are imported from the matrix when the solver is initialized. The setup of the preconditioner has to be done with the \lstinline[style=CStyle]|SUNLinSolSetup_PSBLAS| routine. Here the codes decide only if we are using a PSBLAS or an MLD2P4 preconditioner by looking at the string char \lstinline[style=CStyle]|ptype[]|, and the PSBLAS contex on which we are working.
 	
-\marginlabel{Prototype} \lstinline[style=CStyle]|SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[])|
+\marginlabel{Prototype} \lstinline[style=CStyle]|SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char ptype[], psb_i_t ictxt)|
 
 \item[\fbox{\texttt{SUNLinSolGetType\_PSBLAS}}] this function returns the type identifier for the linear solver, that in this case is of matrix-iterative type.
 
@@ -1083,7 +1083,21 @@ The example given in the code~\ref{lst:thesolution}, initializes a linear solver
 
 \section{A complete KINSOL-PSBLAS tutorial}
 
-We consider here a complete example of usage for the KINSOL package with PSBLAS linear algebra and iterative solver routines. Our interest in having a Newton-Krylov solver is mostly related to the task of approximating the solution of nonlinear differential problems. To illustrate the functionalities we have introduced for the KINSOL package we focus on the solution of a model semilinear elliptic partial differential equation in two dimensions, via a finite-difference method.
+\marginlabel{
+	\textit{Library structure}
+	\begin{minipage}{0.9\textwidth}
+		\dirtree{%
+			.1 kinsol-psblas.
+			.2 config.
+			.2 doc.
+			.2 examples.
+			.3 kinsol.
+			.4 psblas.
+			.2 include.
+			.2 src.
+			.2 test.
+		}
+\end{minipage}}We consider here a complete example of usage for the KINSOL package with PSBLAS linear algebra and iterative solver routines. Our interest in having a Newton-Krylov solver is mostly related to the task of approximating the solution of nonlinear differential problems. To illustrate the functionalities we have introduced for the KINSOL package we focus on the solution of a model semilinear elliptic partial differential equation in two dimensions, via a finite-difference method.
 
 To arrive at the PDE we wish to solve, we start by considering the problem we are interested in we start by considering the problem of minimizing the energy functional 
 \begin{equation}\label{eq:functional}
@@ -1157,7 +1171,409 @@ Before, entering into the details regarding the implementation, we compute also 
 J_F(\mathbf{u}) = \varepsilon^2 A -I +3\operatorname{diag}(\mathbf{u}^2).
 \end{equation}
 
+As we have discussed in the general framework, the first step is to initialize the PSBLAS environment and to set the distribution of the data. In this case we are going to use also the interoperability between PSBLAS and MPI to use some native MPI functions, thus we recover also the MPI Communicator from the PSBLAS context,
+\begin{lstlisting}[style=CStyle]
+psb_i_t      ictxt;     /* PSBLAS Context            */
+MPI_Comm     comm;      /* MPI Communicator          */
+psb_i_t      np, iam;   /* Number of procs, proc id  */
+ictxt = psb_c_init();
+psb_c_info(ictxt,&iam,&np);
+comm = MPI_Comm_f2c(ictxt);
+\end{lstlisting}
 
+The next step is then deciding the distribution of the data among the processes, this is analogous to what we have seen in the other examples, and can be achieved by
+\begin{lstlisting}[style=CStyle]
+psb_c_descriptor *cdh;  /* PSBLAS Descriptor         */
+psb_l_t     n,m,nt,nr;
+psb_i_t     nlr;
+
+cdh = psb_c_new_descriptor();
+psb_c_set_index_base(0);
+m = ((psb_l_t) idim )*idim;
+n = m;
+nt = (m+np-1)/np;
+nr = fmax(0,fmin(nt,m-(iam*nt)));
+nt = nr;
+MPI_Allreduce(MPI_IN_PLACE,&nt,1,MPI_LONG,MPI_SUM,comm);
+if(nt != m){
+ printf("%d Initialization error %ld %ld %ld\n",iam,nr,nt,m);
+ psb_c_barrier(ictxt);
+ psb_c_abort(ictxt);
+ return(1);
+}
+if (info=psb_c_cdall_nl(nr, ictxt, cdh)!=0) {
+ fprintf(stderr,"From cdall: %d\nBailing out\n",info);
+ psb_c_abort(ictxt);
+}
+nlr = psb_c_cd_get_local_rows(cdh);
+\end{lstlisting}
+We are going again for a simple block distribution of the unknowns, in this case another feasible way of performing the data distribution would have been using the \lstinline[style=CStyle]|MPI_Cart_coords| MPI function to achieve a bi-dimensional distribution related to the grid.
+
+The next step is then building the pieces needed to perform the computations of $F(\mathbf{u})$ in~\eqref{eq:zerotobe}. In this case the parts that is useful to have computed just one time and to be kept in memory are the matrix $\varepsilon^2 A$ and the forcing term $\mathbf{f}$. While we are at this, we observe also the the Jacobian in~\eqref{eq:jacobian} shares the same pattern of the $A$ matrix, thus we can also build at the same time the template for it. Moreover, since this is a test problem, we build also the true solution. We use the functions from Section~\ref{sec:nvector}, and Section~\ref{sec:sunmatrix} to initialize and allocate the space for the matrix.
+\begin{lstlisting}[style=CStyle]
+LAP = NULL;  /* The matrix epsilon^2 A */
+LAP = SUNPSBLASMatrix(ictxt, cdh); 
+J = NULL;    /* The prototype for the Jacobian */
+J = SUNPSBLASMatrix(ictxt, cdh);
+fvec = NULL; /* The forcing term f */
+fvec = N_VNew_PSBLAS(ictxt, cdh);
+\end{lstlisting}
+We first compute some useful quantities, namely, the scaling,
+\begin{lstlisting}[style=CStyle]
+/* We loop over rows belonging to current process using our BLOCK data distribution.                             */
+deltah   = ((psb_d_t) 1.0)/(idim+1);
+sqdeltah = deltah*deltah;
+deltah2  = ((psb_d_t) 2.0)*deltah;
+sizes[0] = idim;
+sizes[1] = idim;
+\end{lstlisting}
+then we query the communicator to discover what are the global indexes that we own,
+\begin{lstlisting}[style=CStyle]
+owned = SUNTRUE;
+myidx = (psb_l_t *) malloc( sizeof(psb_l_t)*nlr );
+psb_c_cd_get_global_indices(myidx,nlr,owned,cdh);
+\end{lstlisting}
+we build an auxiliary matrix consisting of one row at a time; just a
+small matrix, the procedure might be extended to generate a group of rows per call
+\begin{lstlisting}[style=CStyle]
+val = (psb_d_t *) malloc( sizeof(psb_d_t)*20*nb );
+irow = (psb_l_t *) malloc( sizeof(psb_l_t)*20*nb );
+icol = (psb_l_t *) malloc( sizeof(psb_l_t)*20*nb );
+\end{lstlisting}
+Finally we launch the whole assembly procedure as
+\begin{lstlisting}[style=CStyle]
+psb_c_barrier(ictxt);
+for(int ii = 0; ii < nlr; ii += nb){
+	ib = fmin(nb,nlr-ii+1);
+	localvecindex = (psb_l_t *) malloc( sizeof(psb_l_t)*ib );
+	valj = (psb_d_t *) malloc( sizeof(psb_d_t)*ib );
+	icoeff = 0;
+	for(int kk = 0; kk < ib; kk++){
+		i = ii + kk;
+		glob_row = myidx[i]-1;              // Local Matrix Pointer
+		psb_c_l_idx2ijk(ijk,glob_row,sizes,modes,base);
+		x = (ijk[0]+1)*deltah;
+		y = (ijk[1]+1)*deltah;
+		
+		zt[kk] = f(x,y,epsilon);
+		ut[kk] = solution(x,y,epsilon);
+		/* Internal point: build discretization                  */
+		// term depending on   (x-1,y)
+		val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+		if (ijk[0] == 0) {
+			zt[kk] = g( (psb_d_t) 0, y )*(-val[icoeff]) + zt[kk];
+		}else{
+			ijktemp[0]   = ijk[0]-1;
+			ijktemp[1]   = ijk[1];
+			icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+			irow[icoeff] = glob_row;
+			icoeff       = icoeff + 1;
+		}
+		// term depending on     (x,y-1)
+		val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+		if (ijk[1] == 0) {
+			zt[kk] = g(x,(psb_d_t) 0)*(-val[icoeff]) + zt[kk];
+		}else{
+			ijktemp[0]   = ijk[0];
+			ijktemp[1]   = ijk[1]-1;
+			icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+			irow[icoeff] = glob_row;
+			icoeff       = icoeff + 1;
+		}
+		// term depending on     (x,y)
+		val[icoeff]  = ( (psb_d_t) 2.0 )*(d(x,y,epsilon) + d(x,y,epsilon))/sqdeltah;
+		icol[icoeff] = psb_c_l_ijk2idx(ijk,sizes,modes,base);
+		irow[icoeff] = glob_row;
+		icoeff       = icoeff + 1;
+		//  term depending on     (x,y+1)
+		val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+		if(ijk[1] == idim - 1){
+			zt[kk] = g(x,(psb_d_t) 1.0)*(-val[icoeff]) + zt[kk];
+		}else{
+			ijktemp[0]   = ijk[0];
+			ijktemp[1]   = ijk[1]+1;
+			icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+			irow[icoeff] = glob_row;
+			icoeff       = icoeff + 1;
+		}
+		// term depending on     (x+1,y)
+		val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+		if(ijk[0] == idim - 1){
+			zt[kk] = g((psb_d_t) 1.0,y)*(-val[icoeff]) + zt[kk];
+		}else{
+			ijktemp[0]   = ijk[0]+1;
+			ijktemp[1]   = ijk[1];
+			icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+			irow[icoeff] = glob_row;
+			icoeff       = icoeff + 1;
+		}
+	}
+	info = SUNMatIns_PSBLAS(icoeff,irow,icol,val,LAP);
+	info = SUNMatIns_PSBLAS(icoeff,irow,icol,val,J);
+	if(info != 0) printf("%d Error in SUNMatIns! %d\n",iam,info);
+	icoeff = 0;
+	for(int jj=ii; jj < ii+ib; jj++){
+		localvecindex[icoeff] = myidx[jj]-1;
+		valj[icoeff] = 1.0;
+		icoeff++;
+	}
+	info = psb_c_dgeins(ib,localvecindex,zt,NV_PVEC_P(fvec),NV_DESCRIPTOR_P(fvec));
+	if(info != 0) printf("%d Error in dgeins! %d\n",iam,info);
+	info = psb_c_dgeins(ib,localvecindex,ut,NV_PVEC_P(utrue),NV_DESCRIPTOR_P(utrue));
+	if(info != 0) printf("%d Error in dgeins! %d\n",iam,info);
+	if(info != 0) printf("%d Error in SUNMatIns! %d\n",iam,info);
+	free(localvecindex);
+}
+\end{lstlisting}
+Now that the insert phase has been completed we need to assemble both the communicator, the two matrices, and the two vectors.
+\begin{lstlisting}[style=CStyle]
+psb_c_cdasb(cdh);
+N_VAsb_PSBLAS(utrue);
+N_VAsb_PSBLAS(fvec);
+SUNMatAsb_PSBLAS(J);
+SUNMatAsb_PSBLAS(LAP);
+\end{lstlisting}
+Before putting together the KINSOL solver we need
+\begin{enumerate}
+	\item the function computing $F(\mathbf{u})$,
+	\item the function computing $J_F(\mathbf(u))$,
+	\item an initial guess $\mathbf{u}$.
+\end{enumerate}
+For this case, as initial guess, we simply select the constant vector with all entries equal to one, namely
+\begin{lstlisting}[style=CStyle]
+u = NULL;
+u = N_VNew_PSBLAS(ictxt, cdh);
+N_VConst(1.0,u);
+\end{lstlisting}
+Then the function for $F(\mathbf{u})$ can be defined as
+\begin{lstlisting}[style=CStyle]
+static int funcprpr(N_Vector u, N_Vector fval, void *user_data){
+struct user_data_for_f *input = user_data;
+N_Vector cc;
+cc = N_VNew_PSBLAS(NV_ICTXT_P(u),NV_DESCRIPTOR_P(u));
+N_VAsb_PSBLAS(cc);
+N_VAsb_PSBLAS(fval);
+// cc <- u
+N_VLinearSum( (psb_d_t) 1.0,u,(psb_d_t) 0.0,cc,cc);     
+// F(u) = -epsilon^2*A*u - u -f + u^3
+SUNMatMatvec_PSBLAS( *input->A, cc, fval );// fval <- Lap cc
+N_VLinearSum_PSBLAS( (psb_d_t) -1.0, *input->f, (psb_d_t) 1.0, fval, fval); // fval = fval - f
+N_VLinearSum_PSBLAS( (psb_d_t) -1.0, cc, (psb_d_t) 1.0, fval, fval); // fval = fval - cc     
+N_VProd_PSBLAS(cc,u,cc); // cc^2 = cc.*u                      
+N_VProd_PSBLAS(cc,u,cc); // cc^3 = u.*cc^2                    
+// fval = fval - cc^3  
+N_VLinearSum_PSBLAS( (psb_d_t) +1.0, cc, (psb_d_t) 1.0, fval, fval);        
+N_VDestroy(cc);
+return(0);
+} 
+\end{lstlisting}
+where we are using the auxiliary structure \lstinline[style=CStyle]|user_data_for_f| to store the auxiliary data we need during the assembly, i.e.,
+\begin{lstlisting}[style=CStyle]
+struct user_data_for_f {
+	SUNMatrix *A;
+	N_Vector *f;
+	psb_i_t sizes[2];
+	psb_d_t sqdeltah;
+	psb_d_t epsilon;
+};
+struct user_data_for_f user_data;/* User data for F,J */
+/* We put the precomputed parts in the auxiliary data structure, this will be used to make both nonlinear function evaluations and Jacobian evaluations */
+user_data.A = &LAP;
+user_data.f = &fvec;
+user_data.sizes[0] = sizes[0];
+user_data.sizes[1] = sizes[1];
+user_data.sqdeltah = sqdeltah;
+user_data.epsilon  = epsilon;
+\end{lstlisting}
+In a similar way the routine of the Jacobian is a replica of the procedure we have used to compute $A$, in which we have changed the term on the diagonal, i.e.,
+\begin{lstlisting}[style=CStyle]
+static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
+void *user_data, N_Vector tmp1, N_Vector tmp2)
+{
+	
+	struct user_data_for_f *input = user_data;
+	psb_l_t     *myidx,*irow,*icol,glob_row;
+	psb_i_t      nlr,ib,icoeff,ijk[2],ijktemp[2],modes=2,base=0,i,iam,np,info;
+	psb_d_t     *val,x,y, epsilon = input->epsilon, zt[nb];
+	psb_d_t     sqdeltah = input->sqdeltah, deltah;
+	psb_i_t     *sizes  =  input->sizes;
+	psb_i_t     idim = sizes[0];
+	bool        owned;
+	deltah = sqrt(sqdeltah);
+	
+	// Who are we?
+	psb_c_info(SM_ICTXT_P(J),&iam,&np);
+	if(iam == 0){
+		printf("\tBuilding a new Jacobian\n");
+		printf("\tSize of the grid %d x %d\n",sizes[0],sizes[1]);
+		printf("\tepsilon = %1.2e deltah = %1.2e\n",epsilon,sqdeltah);
+	}
+	SUNMatZero(J); // We put to zero the old Jacobian to reuse the structure
+	
+	nlr = psb_c_cd_get_local_rows(SM_DESCRIPTOR_P(J));
+	owned = SUNTRUE;
+	myidx = (psb_l_t *) malloc( sizeof(psb_l_t)*nlr );
+	psb_c_cd_get_global_indices(myidx,nlr,owned,NV_DESCRIPTOR_P(yvec));
+	
+	/* we build an auxiliary matrix consisting of one row at a time; just a
+	small matrix. might be extended to generate a bunch of rows per call. */
+	val = (psb_d_t *) malloc( sizeof(psb_d_t)*20*nb );
+	irow = (psb_l_t *) malloc( sizeof(psb_l_t)*20*nb );
+	icol = (psb_l_t *) malloc( sizeof(psb_l_t)*20*nb );
+	
+	for(int ii = 0; ii < nlr; ii += nb){
+		ib = fmin(nb,nlr-ii+1);
+		icoeff = 0;
+		for(int kk = 0; kk < ib; kk++){
+			i = ii + kk;
+			glob_row = myidx[i]-1;              // Local Matrix Pointer
+			psb_c_l_idx2ijk(ijk,glob_row,sizes,modes,base);
+			x = (ijk[0]+1)*deltah;
+			y = (ijk[1]+1)*deltah;
+			
+			zt[kk] = f(x,y,epsilon);
+			/* Internal point: build discretization                  */
+			// term depending on   (x-1,y)
+			val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+			if (ijk[0] == 0) {
+				zt[kk] = g( (psb_d_t) 0, y )*(-val[icoeff]) + zt[kk];
+			}else{
+				ijktemp[0]   = ijk[0]-1;
+				ijktemp[1]   = ijk[1];
+				icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+				irow[icoeff] = glob_row;
+				icoeff       = icoeff + 1;
+			}
+			// term depending on     (x,y-1)
+			val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+			if (ijk[1] == 0) {
+				zt[kk] = g(x,(psb_d_t) 0)*(-val[icoeff]) + zt[kk];
+			}else{
+				ijktemp[0]   = ijk[0];
+				ijktemp[1]   = ijk[1]-1;
+				icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+				irow[icoeff] = glob_row;
+				icoeff       = icoeff + 1;
+			}
+\end{lstlisting}
+Here we have the change with respect to $A$, and we use the elements of the current solution
+\begin{lstlisting}[style=CStyle]
+			// term depending on     (x,y)
+			val[icoeff]  = ( (psb_d_t) 2.0 )*(d(x,y,epsilon) + d(x,y,epsilon))/sqdeltah
+			-((psb_d_t) 1.0) + ((psb_d_t) 3.0)*pow((N_VGetArrayPointer_PSBLAS(yvec))[i],2.0);
+			icol[icoeff] = psb_c_l_ijk2idx(ijk,sizes,modes,base);
+			irow[icoeff] = glob_row;
+			icoeff       = icoeff + 1;
+			//  term depending on     (x,y+1)
+			val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+			if(ijk[1] == idim - 1){
+				zt[kk] = g(x,(psb_d_t) 1.0)*(-val[icoeff]) + zt[kk];
+			}else{
+				ijktemp[0]   = ijk[0];
+				ijktemp[1]   = ijk[1]+1;
+				icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+				irow[icoeff] = glob_row;
+				icoeff       = icoeff + 1;
+			}
+			// term depending on     (x+1,y)
+			val[icoeff] = -d(x,y,epsilon)/sqdeltah;
+			if(ijk[0] == idim - 1){
+				zt[kk] = g((psb_d_t) 1.0,y)*(-val[icoeff]) + zt[kk];
+			}else{
+				ijktemp[0]   = ijk[0]+1;
+				ijktemp[1]   = ijk[1];
+				icol[icoeff] = psb_c_l_ijk2idx(ijktemp,sizes,modes,base);
+				irow[icoeff] = glob_row;
+				icoeff       = icoeff + 1;
+			}
+		}
+		info = SUNMatIns_PSBLAS(icoeff,irow,icol,val,J);
+		if(info != 0) printf("%d Error in SUNMatIns! %d\n",iam,info);
+	}
+	
+	SUNMatAsb_PSBLAS(J);
+	if(iam == 0){
+		printf("\tBuilding phase completed\n");
+	}
+	
+	/* Free the Memory for the Auxiliary Array */
+	free(val);
+	free(irow);
+	free(icol);
+	free(myidx);
+	
+	return(0);
+}
+\end{lstlisting}
+
+Now we have almost all the bits and pieces on the PSBLAS side needed to the define our KINSOL solver, the last thing we need is a vector of constraints than need to be enforced on the Newton iteration, since in this case we have no constraint to enforce this is simply a constant vector of zeros, i.e.,
+\begin{lstlisting}[style=CStyle]
+constraints = NULL;
+constraints = N_VNew_PSBLAS(ictxt, cdh);
+N_VConst(0.0,constraints);
+\end{lstlisting}
+and then we define the nonlinear solver as 
+\begin{lstlisting}[style=CStyle]
+/* Call KINCreate/KINInit to initialize KINSOL:
+A pointer to KINSOL problem memory is returned and stored in kmem. */
+kmem = KINCreate();
+info = KINInit(kmem, funcprpr, u);
+info = KINSetNumMaxIters(kmem, newtonmaxit);
+info = KINSetPrintLevel(kmem, 0);
+info = KINSetUserData(kmem, &user_data);
+info = KINSetConstraints(kmem, constraints);
+info = KINSetFuncNormTol(kmem, fnormtol);
+info = KINSetScaledStepTol(kmem, scsteptol);
+/* We no longer need the constraints vector since KINSetConstraints creates a private copy for KINSOL to use. */
+N_VDestroy(constraints);
+\end{lstlisting}
+We refer to the guide~\cite{kinsolguide} for the meaning of the different options. Now we need to tell KINSOL how we would like our linear systems with the Jacobian matrix to be solved. We are using a matrix-based approach, so we need to exploit the solver we have introduced in Section~\ref{sec:sunlinsol}. Therefore, we build an instance of a PSBLAS solver with a ML preconditioner by doing
+\begin{lstlisting}[style=CStyle]
+/* We create now the linear systes solver */
+psb_c_DefaultSolverOptions(&options);
+options.eps    = tol;
+options.itmax  = itmax;
+options.irst   = irst;
+options.itrace = 1;
+options.istop  = istop;
+/* Create PSBLAS/MLD2P4 linear solver */
+LS = SUNLinSol_PSBLAS(options, methd, ptype, ictxt);
+\end{lstlisting}
+Then we set the option for the Multigrid preconditioner as 
+\begin{lstlisting}[style=CStyle]
+SUNLinSolInitialize_PSBLAS(LS);
+info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
+info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
+info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SOLVE","BJAC");
+info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
+\end{lstlisting}
+We can then the PSBLAS linear solver (together with its preconditioner) to KINSOL by doing
+\begin{lstlisting}[style=CStyle]
+info = KINSetLinearSolver(kmem, LS, J);
+info = KINSetJacFn(kmem,jac);
+info = KINSetEtaForm(kmem,KIN_ETACONSTANT);
+info = KINSetEtaConstValue(kmem,options.eps);
+\end{lstlisting}
+Now the setup phase is completed, and we have only to call the solver on our problem. This is achieved by doing
+\begin{lstlisting}[style=CStyle]
+info = KINSol(kmem,/* KINSol memory block */
+	u,             /* initial guess on input/solution vector */
+	globalstrategy, /* global strategy choice */
+	sc,    /* scaling vector for the variable u */
+	sc);   /* scaling vector for function values fval */
+\end{lstlisting}
+where the scaling vector is simply
+\begin{lstlisting}[style=CStyle]
+sc = NULL;
+sc = N_VNew_PSBLAS(ictxt, cdh);
+N_VConst(1.0/sqdeltah,sc);
+\end{lstlisting}
+\marginlabel{
+	\includegraphics[width=\leftmarginwidth]{ginzburglandausolution.pdf}
+	{\flushleft Solution of~\eqref{eq:zerotobe} for a $60\times 60$ grid.}
+}At the end of this call the vector $\mathbf{u}$ will contain our approximate solution, on the left we have given a plot of the solution of the point-wise difference with the true solution for a $60\times 60$ grid.
+
+The complete code for running the example, and having the possibilities of changing both the parameters of the solvers and of the problems, is contained in \texttt{examples/kinsol/psblas}.
 
 
 \appendix
