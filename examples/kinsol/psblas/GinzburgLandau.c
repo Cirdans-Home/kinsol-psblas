@@ -109,9 +109,9 @@ struct user_data_for_f {
    void *kmem;                              /* Pointer to KINSOL memory    */
    struct user_data_for_f user_data;        /* User data for computing F,J */
    /* Problem datas */
-   N_Vector     u,fvec,constraints,sc,err,utrue;
+   N_Vector     u,fvec,constraints,sc,su,err,utrue;
    SUNMatrix    LAP,J;
-   psb_d_t      deltah,deltah2,sqdeltah,x,y,zt[nb],ut[nb],errorvalue;
+   psb_d_t      deltah,deltah2,sqdeltah,x,y,zt[nb],ut[nb],errorvalue,truenorm;
    psb_d_t      *val, epsilon, *valj;
    psb_l_t      *irow,*icol,*localvecindex;
    psb_i_t      icoeff,ilocalvec;
@@ -305,6 +305,19 @@ struct user_data_for_f {
        N_VDestroy(u);
        N_VDestroy(constraints);
        N_VDestroy(sc);
+       psb_c_abort(ictxt);
+       return(1);
+   }
+   su = NULL;
+   su = N_VNew_PSBLAS(ictxt, cdh);
+   if (su == NULL) {
+     if (iam == 0) printf("FAIL: Unable to create a new vector (utrue) \n\n");
+       SUNMatDestroy(LAP);
+       SUNMatDestroy(J);
+       N_VDestroy(fvec);
+       N_VDestroy(u);
+       N_VDestroy(constraints);
+       N_VDestroy(sc);
        N_VDestroy(utrue);
        psb_c_abort(ictxt);
        return(1);
@@ -414,7 +427,8 @@ struct user_data_for_f {
     psb_c_cdasb(cdh);
     N_VConst(0.0,constraints);
     N_VConst(1.0,u);
-    N_VConst(1.0/sqdeltah,sc);
+    N_VConst(1e-4*sqdeltah,sc);
+    N_VConst(1e-4*sqdeltah,su);
     N_VAsb_PSBLAS(utrue);
     N_VAsb_PSBLAS(fvec);
     SUNMatAsb_PSBLAS(J);
@@ -485,17 +499,24 @@ struct user_data_for_f {
 
 
     /* Call KINSol and print output concentration profile */
+    t1 = psb_c_wtime();
     info = KINSol(kmem,           /* KINSol memory block */
                   u,              /* initial guess on input; solution vector */
                   globalstrategy, /* global strategy choice */
-                  sc,    /* scaling vector for the variable u */
+                  su,             /* scaling vector for the variable u */
                   sc);            /* scaling vector for function values fval */
 
     if (check_flag(&info, "KINSol", 1, iam)) psb_c_abort(ictxt);
+    t2 = psb_c_wtime();
+
 
     N_VLinearSum((psb_d_t) 1.0, u, (psb_d_t) -1.0, utrue, err);
     errorvalue = psb_c_dgenrm2(NV_PVEC_P(err),NV_DESCRIPTOR_P(err));
-    if(iam == 0) printf("\n\nProgram terminated with error %1.3e\n\n",errorvalue);
+    truenorm = psb_c_dgenrm2(NV_PVEC_P(utrue),NV_DESCRIPTOR_P(utrue));
+    if(iam == 0){
+      printf("\n\nProgram terminated with error %1.3e\n",errorvalue/truenorm);
+      printf("Time: %lf\n\n",(t2-t1));
+    }
 
     if(iam == 0) PrintFinalStats(kmem);
 
@@ -514,6 +535,7 @@ struct user_data_for_f {
     N_VDestroy(u);
     N_VDestroy(fvec);
     N_VDestroy(sc);
+    N_VDestroy(su);
     N_VDestroy(err);
     N_VDestroy(utrue);
     SUNMatDestroy(LAP);
