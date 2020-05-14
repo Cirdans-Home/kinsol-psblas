@@ -48,6 +48,7 @@
 \definecolor{mGreen}{rgb}{0,0.6,0}
 \definecolor{mGray}{rgb}{0.5,0.5,0.5}
 \definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{blue(ncs)}{rgb}{0.0, 0.53, 0.74}
 \definecolor{sunGreen}{HTML}{70ad47}
 \definecolor{sunCyan}{HTML}{dae3f3}
 \definecolor{sunBlue}{HTML}{8faadc}
@@ -69,7 +70,13 @@
 	showtabs=false,
 	tabsize=2,
 	language=C,
-	morekeywords={N_Vector,sunindextype,psb_i_t,psb_c_descriptor,psb_c_dvector,booleantype,psb_c_info,psb_c_init,psb_cdall,psb_c_cdall_vl,psb_l_t}
+	morekeywords={N_Vector,SUNMatrix,sunindextype,psb_i_t,psb_c_descriptor,psb_c_dvector,booleantype,psb_l_t,realtype,psb_c_SolverOptions,SUNLinearSolver,SUNLinearSolver_Type,MPI_IN_PLACE,MPI_LONG,MPI_SUM,NULL,psb_d_t,SUNTRUE,SUNFALSE,free,malloc,MPI_Comm,printf,fprintf,SUNDIALS_NVEC_CUSTOM,bool},
+	emph={%  
+		psb_c_info,psb_c_init,psb_cdall,psb_c_cdall_vl,psb_c_cdall_nl,psb_c_abort,psb_c_new_descriptor,%
+		psb_c_set_index_base,psb_c_dfree,psb_c_exit,psb_c_cdall_vg,psb_c_cdasb,psb_c_DefaultSolverOptions,%
+		MPI_Comm_f2c,MPI_Allreduce,psb_c_barrier,psb_c_l_idx2ijk,psb_c_l_ijk2idx,psb_c_dgeins,%
+		psb_c_cd_get_global_indices,psb_c_cd_get_local_rows%
+		},emphstyle={\color{blue(ncs)}}
 }
 
 \usepackage[backend=biber,sorting=nty,sortcites=true]{biblatex}
@@ -94,7 +101,7 @@
 		\item KINSOL, solves nonlinear algebraic systems.
 	\end{itemize}
 	
-	The numerical operations performed in these codes are operations on vectors and matrices, and the codes provides both custom implementation and interfaces to these vector operations. What we provide here is a particular interface for such operations to the linear algebra operations provided by the Parallel Sparse BLAS (PSBLAS) library~\cite{filippone2000psblas,Filippone:2017:SMM:3034774.3017994,cardellini2014design,filippone2012object}; see the whole structure of the library in Figure~\ref{fig:software_structure}.
+	The numerical operations performed in these codes are operations on vectors and matrices, and the codes provides both custom implementation and interfaces to these vector operations. What we provide here is a particular interface for such operations to the linear algebra operations provided by the Parallel Sparse BLAS (PSBLAS) library~\cite{filippone2000psblas,filippone2012object}; see the whole structure of the library in Figure~\ref{fig:software_structure}.
 
 	\begin{fullfigure}[htpp]
 	\centering
@@ -260,11 +267,11 @@ psb_c_info(ictxt,&iam,&np);
 	\item[\fbox{psb\_c\_init}] this subroutine initializes the PSBLAS parallel environment, defining a virtual parallel machine, the value \texttt{ictxt} in out is the communication context identifying the virtual parallel machine.
 	This is always a duplicate of \texttt{basectxt}, so that library communications are completely separated from other communication operations
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_init();|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_init()|
 	
 	\item[\fbox{psb\_c\_info}] this subroutine returns information about the PSBLAS parallel environment, defining a virtual parallel machine that is identified by the value \texttt{ictxt}. The values on return are the identifier of current process in the PSBLAS virtual parallel machine (\texttt{iam}), and the number of processes in the PSBLAS virtual parallel machine~(\texttt{np})
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_info(psb_i_t ictxt,psb_i_t *iam,psb_i_t *np);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_info(psb_i_t ictxt,psb_i_t *iam,psb_i_t *np)|
 	
 \end{description}	
 	
@@ -279,7 +286,7 @@ psb_c_info(ictxt,&iam,&np);
 	$(1,\ldots,\lstinline[style=CStyle]|np|)$ according to the fact that \lstinline[style=CStyle]|psb_c_set_index_base(0)| or \lstinline[style=CStyle]|psb_c_set_index_base(1)| has been called at the beginning. The size \lstinline[style=CStyle]|ng| is specified one can chose to use the entire
 	vector \lstinline[style=CStyle]|vg[]|, thus having \lstinline[style=CStyle]|vg[ng]|.
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_vg(psb_l_t ng,psb_i_t *vg,psb_i_t ictxt,psb_c_descriptor *cdh);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_vg(psb_l_t ng,psb_i_t *vg,psb_i_t ictxt,psb_c_descriptor *cdh)|
 	\item[\fbox{\texttt{psb\_c\_cdall\_vl}}] the association is done by specifying the list of indices \lstinline[style=CStyle]|vl[nl]| assigned to
 	the current process; thus, the global problem size \lstinline[style=CStyle]|nl| is given by
 	the range of the aggregate of the individual vectors \lstinline[style=CStyle]|vl[]| specified in
@@ -288,11 +295,11 @@ psb_c_info(ictxt,&iam,&np);
 	in the input lists \lstinline[style=CStyle]|vl[]|, therefore it allows for the presence of overlap in the
 	input, and checks for the ``orphan'' indices.
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_vl(psb_i_t nl,psb_l_t *vl,psb_i_t ictxt,psb_c_descriptor *cdh);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_vl(psb_i_t nl,psb_l_t *vl,psb_i_t ictxt,psb_c_descriptor *cdh)|
 	\item[\fbox{\texttt{psb\_c\_cdall\_nl}}] produces a generalized block-row distribution of the number of indices belonging to the current process in which each process $i$ gets assigned
 	a consecutive chunk of $nl$ global indices,
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_nl(psb_i_t nl,psb_i_t ictxt, psb_c_descriptor *cdh);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|psb_c_cdall_nl(psb_i_t nl,psb_i_t ictxt, psb_c_descriptor *cdh)|
 \end{description}
 	for the case of a simple minded block distribution, i.e., the index space is first numbered sequentially in a standard way, then the corresponding vector is distributed according to a block distribution directive.
 	%The discretization ensures there are IDIM *internal* points in each direction.
@@ -334,15 +341,15 @@ psb_c_cdall_vl(nl,vl,ictxt,cdh);
 	\begin{description}
 		\item[\fbox{\texttt{psb\_c\_cdfree}}] frees a communication descriptor
 		
-		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_cdfree(psb_c_descriptor *cdh)|;
+		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_cdfree(psb_c_descriptor *cdh)|
 		
 		\item[\fbox{\texttt{psb\_c\_exit}}] this subroutine exits from the PSBLAS parallel virtual machine, observe that this routine may be called even if a previous call to \lstinline[style=CStyle]|psb_info| has returned with \lstinline[style=CStyle]|iam=-1|.
 		
-		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_exit(psb_i_t ictxt);|
+		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_exit(psb_i_t ictxt)|
 		
 		\item[\fbox{\texttt{psb\_c\_abort}}] this subroutine aborts computation on the parallel virtual machine, and can be used when error that needs the program to fail occurs.
 		
-		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_abort(psb_i_t ictxt);| 		
+		\marginlabel{Prototype} \lstinline[style=CStyle]|psb_i_t psb_c_abort(psb_i_t ictxt)| 		
 		
 	\end{description}
 
@@ -423,15 +430,15 @@ The NVECTOR\_PSBLAS implementation provides PSBLAS implementations of all the ve
 	\item[\fbox{\texttt{N\_VNew\_PSBLAS}}] This function creates and allocates memory for a parallel vector
 	on the PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh|
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VNew_PSBLAS(int ictxt, psb_c_descriptor *cdh)|
 	
 	\item[\fbox{\texttt{N\_VNewEmpty\_PSBLAS}}] This function creates a new PSBLAS vector with empty data array.
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VNewEmpty_PSBLAS(int ictxt, psb_c_descriptor *cdh)|
 	
 	\item[\fbox{\texttt{N\_VMake\_PSBLAS}}] Function to create a PSBLAS \texttt{N\_Vector} with user data component. This function is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dgeins|.
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh,psb_i_t m, psb_i_t *irow,double *val);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|N_Vector N_VMake_PSBLAS(int ictxt, psb_c_descriptor *cdh,psb_i_t m, psb_i_t *irow,double *val)|
 	
 	The PSBLAS context \lstinline[style=CStyle]|ictxt| with the communicator \lstinline[style=CStyle]|cdh| are the one defined for the whole programs, the integer \lstinline[style=CStyle]{m} is the number of rows in \lstinline[style=CStyle]{val[]} to be inserted, the array of integers \lstinline[style=CStyle]{irow} is the indices of the rows to be inserted. Specifically, row \lstinline[style=CStyle]|i| of \lstinline[style=CStyle]|val| will be inserted into the local row corresponding to the global index row index \lstinline[style=CStyle]|row[i]|.
 	
@@ -657,17 +664,17 @@ By default all fused and vector array operations are disabled in the nvector PSB
 The following additional user-callable routines are provided to enable or disable fused and vector
 array operations for a specific vector.
 \begin{lstlisting}[style=CStyle]
-int N_VEnableFusedOps_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableLinearCombination_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableScaleAddMulti_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableDotProdMulti_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableLinearSumVectorArray_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableScaleVectorArray_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableConstVectorArray_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableWrmsNormVectorArray_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableWrmsNormMaskVectorArray_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableScaleAddMultiVectorArray_PSBLAS(N_Vector v,booleantype tf);
-int N_VEnableLinearCombinationVectorArray_PSBLAS(N_Vector v,booleantype tf);
+int N_VEnableFusedOps_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableLinearCombination_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableScaleAddMulti_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableDotProdMulti_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableLinearSumVectorArray_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableScaleVectorArray_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableConstVectorArray_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableWrmsNormVectorArray_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableWrmsNormMaskVectorArray_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableScaleAddMultiVectorArray_PSBLAS(N_Vector v,booleantype tf)
+int N_VEnableLinearCombinationVectorArray_PSBLAS(N_Vector v,booleantype tf)
 \end{lstlisting}
 
 \section{The SUNMATRIX\_PSBLAS implementation}\label{sec:sunmatrix}
@@ -742,13 +749,13 @@ The SUNMATRIX\_PSBLAS implementation provides PSBLAS implementations of all the 
 \begin{description}
 	\item[\fbox{\texttt{SUNMatAsb\_PSBLAS}}] This routine assemble the SUNMATRIX after that all the elements have been inserted into it, i.e., after that all the calls to the \texttt{SUNMatIns\_PSBLAS} routine have been completed. This is substantially a wrapper for the PSBLAS function \lstinline[style=CStyle]|psb_c_dspasb|.
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatAsb_PSBLAS(SUNMatrix A);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatAsb_PSBLAS(SUNMatrix A)|
 	
 	\item[\fbox{\texttt{SUNMatIns\_PSBLAS}}] This routine inserts a set of coefficients into a sparse matrix. On entry to this routine the descriptor may be in either the BUILD or ASSEMBLED state, while the sparse matrix may be in either the BUILD or UPDATE state. We stress that it mandatory that if the descriptor is in the BUILD state, then also the sparse matrix \textit{must} be in
 	the BUILD state, since adding entries to the matrix causes internal calls altering the structure of the communication pattern for the distributed object. The insert of the element in the matrix si assumed to be in the COO format, thus the coefficients to be inserted are represented by the ordered triples \lstinline[style=CStyle]|irw[i]|, \lstinline[style=CStyle]|icl[i]|, \lstinline[style=CStyle]|val[i]|, for $i = 1,\ldots,\lstinline[style=CStyle]|nz|$; these triples should belong to the current process, i.e., the index \lstinline[style=CStyle]|irw[i]| should be one of the local indices, but are otherwise arbitrary, it this is not the case any coefficients from matrix rows not owned by the calling process are
 	silently ignored.
 	
-	\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatIns_PSBLAS(psb_i_t nz, const psb_l_t *irw, const psb_l_t *icl, const psb_d_t *val,SUNMatrix A);|
+	\marginlabel{Prototype} \lstinline[style=CStyle]|int SUNMatIns_PSBLAS(psb_i_t nz, const psb_l_t *irw, const psb_l_t *icl, const psb_d_t *val,SUNMatrix A)|
 \end{description}
 
 \subsubsection{Description of the SUNMATRIX\_PSBLAS functions}
@@ -987,7 +994,7 @@ The detail of the options for the various solver are recalled in Section~\ref{se
 
 \marginlabel{Prototype} \lstinline[style=CStyle]|SUNLinearSolver_Type SUNLinSolGetType_PSBLAS(SUNLinearSolver S)|
 
-\item[\fbox{\texttt{SUNLinSolInitialize\_PSBLAS}}] this function performs the linear solver initialization by assuming that all solver-specific options have been set, i.e., in the case of \lstinline[style=CStyle]|ptype="ML"| preconditioner after the calls to the \texttt{SUNLinSolSet[i,c,r]\_PSBLAS} routines.
+\item[\fbox{\texttt{SUNLinSolInitialize\_PSBLAS}}] this function performs the linear solver initialization by assuming that all solver-specific options will be set after that it has been called, i.e., in the case of \lstinline[style=CStyle]|ptype="ML"| preconditioner before the calls to the \texttt{SUNLinSolSet[i,c,r]\_PSBLAS} routines.
 
 \marginlabel{Prototype} \lstinline[style=CStyle]|int SUNLinSolInitialize_PSBLAS(SUNLinearSolver S)|
 
@@ -1079,7 +1086,7 @@ SUNLinSolSetup(LS, A);
 SUNLinSolSolve_PSBLAS(LS, A, x, b, tol);
 \end{lstlisting}
 
-The example given in the code~\ref{lst:thesolution}, initializes a linear solver requesting for a Conjugate Gradient method (\lstinline[style=CStyle]|"CG"|), preconditioned by a multi-level preconditioner (\lstinline[style=CStyle]|"ML"|). Then, after the initialization step, some of the properties of the multigrid cycle are selected. Specifically, we decide to use two smoother sweeps of Block-Jacobi with an ILU(1) subsolver (\lstinline[style=CStyle]|"SUB_FILLIN"|), and set again a Block-Jacobi method as coarse solver (\lstinline[style=CStyle]|"COARSE_SUBSOLVE"|) that uses instead as solver for the blocks and ILU(0) (\lstinline[style=CStyle]|"COARSE_FILLIN"|) factorization. Then a setup step is performed, during this step the multigrid hierarchy is assembled. Finally the solution of the linear system is computed by a call to \lstinline[style=CStyle]|SUNLinSolSolve_PSBLAS|. Observe that if we have put the value \lstinline[style=CStyle]|options.itrace = 1;| the solve routine will print convergence information for each iteration.
+The example given in the code~\ref{lst:thesolution}, initializes a linear solver requesting for a Conjugate Gradient method (\lstinline[style=CStyle]|"CG"|), preconditioned by a multi-level preconditioner (\lstinline[style=CStyle]|"ML"|). Then, after the initialization step, some of the properties of the multigrid cycle are selected. Specifically, we decide to use two smoother sweeps of Block-Jacobi with an ILU(1) subsolver (\lstinline[style=CStyle]|"SUB_FILLIN"|), and set again a Block-Jacobi method as coarse solver (\lstinline[style=CStyle]|"COARSE_SUBSOLVE"|) that uses instead as solver for the blocks and ILU(0) (\lstinline[style=CStyle]|"COARSE_FILLIN"|) factorization. Then a setup step is performed, during this step the multigrid hierarchy is assembled. Finally the solution of the linear system is computed by a call to \lstinline[style=CStyle]|SUNLinSolSolve_PSBLAS|. Observe that if we have put the value \lstinline[style=CStyle]|options.itrace = 1| the solve routine will print convergence information for each iteration.
 
 \section{A complete KINSOL-PSBLAS tutorial}
 
@@ -1556,11 +1563,11 @@ info = KINSetEtaConstValue(kmem,options.eps);
 \end{lstlisting}
 Now the setup phase is completed, and we have only to call the solver on our problem. This is achieved by doing
 \begin{lstlisting}[style=CStyle]
-info = KINSol(kmem,/* KINSol memory block */
+info = KINSol(kmem,/* KINSol memory block                  */
 	u,             /* initial guess on input/solution vector */
-	globalstrategy, /* global strategy choice */
-	sc,    /* scaling vector for the variable u */
-	sc);   /* scaling vector for function values fval */
+	globalstrategy,/* global strategy choice                 */
+	sc,    /* scaling vector for the variable u              */
+	sc);   /* scaling vector for function values fval        */
 \end{lstlisting}
 where the scaling vector is simply
 \begin{lstlisting}[style=CStyle]
