@@ -1573,7 +1573,7 @@ where the scaling vector is simply
 \begin{lstlisting}[style=CStyle]
 sc = NULL;
 sc = N_VNew_PSBLAS(ictxt, cdh);
-N_VConst(1.0/sqdeltah,sc);
+N_VConst(1e-4*sqdeltah,sc);
 \end{lstlisting}
 \marginlabel{
 	\includegraphics[width=\leftmarginwidth]{ginzburglandausolution.pdf}
