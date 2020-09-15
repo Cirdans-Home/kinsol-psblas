@@ -1,2 +1,8 @@
-1                     Number of entries below this
-20                    Domain size (actual system is this**2)
+7                     Number of entries below this
+20                    Domain size (actual system is this**3)
+0.410                 θs : Saturated moisture contents
+0.095                 θr : Residual moisture contents
+1.9                   α  : van Genuchten empirical parameter
+1.0                   β  : van Genuchten empirical parameter
+1.0                   γ  : van Genuchten empirical parameter
+0.062                 Ks : Saturated hydraulic conductivity
