@@ -50,13 +50,26 @@
  #include <mpi.h>
 
  /* ------------------------------------------------
- Auxiliary functions for KINSOL
+  * Auxiliary functions for KINSOL
  -------------------------------------------------*/
+ // These functions are declared static to avoid conflicts with things that
+ // could be somewhere else in the KINSOL library. It works also without the
+ // static declaration, but you never know.
  static int funcprpr(N_Vector u, N_Vector fval, void *user_data);
  static int jac(N_Vector y, N_Vector f, SUNMatrix J,
                 void *user_data, N_Vector tmp1, N_Vector tmp2);
  static int check_flag(void *flagvalue, const char *funcname, int opt, int id);
 
+ /*--------------------------------------------------
+  * Coefficient functions for J and F
+  *-------------------------------------------------*/
+  static double Sfun(double p, double alpha, double beta, double thetas,
+                      double thetar);
+  static double Kfun(double p, double a, double gamma, double Ks);
+  static double Sfunprime(double p, double alpha, double beta, double thetas,
+                      double thetar);
+  static double Kfunprime(double p, double a, double gamma, double Ks);
+  static double sgn(double x);
 
  /*-------------------------------------------------
   * Routine to read input from file
@@ -93,7 +106,7 @@
     psb_l_t *vl;          // Local portion of the global indexs
     psb_i_t idim;         // Number of dofs in one direction
     psb_i_t nl;           // Number of blocks in the distribution
-    psb_d_t thetas, thetar, alpha, beta, gamma, Ks; // Problem Parameters
+    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks; // Problem Parameters
     psb_d_t dt;
     N_Vector *oldpressure; // Old Pressure value for Euler Time-Stepping
   };
@@ -116,7 +129,7 @@
     SUNMatrix    J;
     /* Input from file */
     psb_i_t nparms, idim, Nt, newtonmaxit, istop, itmax, itrace, irst;
-    psb_d_t thetas, thetar, alpha, beta, gamma, Ks, Tmax, tol;
+    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, Tmax, tol;
     double  fnormtol, scsteptol;
     char methd[20],ptype[20],afmt[8]; /* Solve method, p. type, matrix format */
     /* Parallel Environment */
@@ -152,6 +165,7 @@
       get_dparm(stdin,&thetar);
       get_dparm(stdin,&alpha);
       get_dparm(stdin,&beta);
+      get_dparm(stdin,&a);
       get_dparm(stdin,&gamma);
       get_dparm(stdin,&Ks);
       get_dparm(stdin,&Tmax);
@@ -168,11 +182,12 @@
       get_iparm(stdin,&irst);
       get_dparm(stdin,&tol);
       fprintf(stdout, "\nModel Parameters:\n");
-      fprintf(stdout, "Saturated moisture contents        : %f\n",thetar);
-      fprintf(stdout, "Residual moisture contents         : %f\n",thetas);
-      fprintf(stdout, "Saturated hydraulic conductivity   : %f\n",Ks);
-      fprintf(stdout, "van Genuchten empirical parameters : (%f,%f,%f)\n",
-        alpha,beta,gamma);
+      fprintf(stdout, "Saturated moisture contents        : %1.3f\n",thetar);
+      fprintf(stdout, "Residual moisture contents         : %1.3f\n",thetas);
+      fprintf(stdout, "Saturated hydraulic conductivity   : %1.3e\n",Ks);
+      fprintf(stdout, "                                   : (α        ,β    ,a        ,γ    )\n");
+      fprintf(stdout, "van Genuchten empirical parameters : (%1.3e,%1.3f,%1.3e,%1.3f)\n",
+        alpha,beta,a,gamma);
       fflush(stdout);
    }
    psb_c_ibcast(ictxt,1,&nparms,0);
@@ -181,6 +196,7 @@
    psb_c_dbcast(ictxt,1,&thetar,0);
    psb_c_dbcast(ictxt,1,&alpha,0);
    psb_c_dbcast(ictxt,1,&beta,0);
+   psb_c_dbcast(ictxt,1,&a,0);
    psb_c_dbcast(ictxt,1,&gamma,0);
    psb_c_dbcast(ictxt,1,&Ks,0);
    psb_c_dbcast(ictxt,1,&Tmax,0);
@@ -229,6 +245,7 @@
    user_data.thetar = thetar;
    user_data.alpha  = alpha;
    user_data.beta   = beta;
+   user_data.a      = a;
    user_data.gamma  = gamma;
    user_data.Ks     = Ks;
 
@@ -393,6 +410,17 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    struct user_data_for_f *input = user_data;
    psb_i_t iam, np, ictxt, idim, nl;
    psb_i_t info;
+   /* Problem parameters */
+   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks;
+
+   /* Load problem parameters */
+   thetas = input->thetas;
+   thetar = input->thetar;
+   alpha  = input->alpha;
+   beta   = input->beta;
+   gamma  = input->gamma;
+   a      = input->a;
+   Ks     = input->Ks;
 
    info = 0;
 
@@ -413,7 +441,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   double val[10*NBMAX], zt[NBMAX];
   psb_l_t irow[10*NBMAX], icol[10*NBMAX];
   /* Problem parameters */
-  psb_d_t thetas, thetar, alpha, beta, gamma, Ks;
+  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks;
 
   /* Load problem parameters */
   thetas = input->thetas;
@@ -421,6 +449,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   alpha  = input->alpha;
   beta   = input->beta;
   gamma  = input->gamma;
+  a      = input->a;
   Ks     = input->Ks;
 
   info = 0;
@@ -473,6 +502,50 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   if ((info=psb_c_dspasb(SM_PMAT_P(J),SM_DESCRIPTOR_P(J)))!=0)  return(info);
 
   return(info);
+}
+
+static double Sfun(double p, double alpha, double beta, double thetas,
+                    double thetar){
+
+  double s = 0.0;
+
+  s = alpha*(thetas-thetar)/(alpha + pow(SUNRabs(p),beta));
+
+  return(s);
+}
+static double Kfun(double p, double a, double gamma, double Ks){
+
+  double K = 0.0;
+
+  K = Ks*a/(a + pow(SUNRabs(p),gamma));
+
+  return(K);
+
+}
+static double Sfunprime(double p, double alpha, double beta, double thetas,
+                    double thetar){
+
+  double s = 0.0;
+
+  s = -alpha*beta*pow(SUNRabs(p),beta-1)*sgn(p)*(thetas-thetar)
+            /pow(alpha + pow(SUNRabs(p),beta),2);
+
+  return(s);
+
+}
+static double Kfunprime(double p, double a, double gamma, double Ks){
+
+  double K = 0.0;
+
+  K = -Ks*a*gamma*pow(SUNRabs(p),gamma-1)*sgn(p)
+          /pow(a + pow(SUNRabs(p),gamma),2);
+
+  return(K);
+}
+
+static double sgn(double x){
+  // Can this be done in a better way?
+  return((x > 0) ? 1 : ((x < 0) ? -1 : 0));
 }
 
 /*--------------------------------------------------------
