@@ -1,4 +1,4 @@
-7                     Number of entries below this
+12                    Number of entries below this
 20                    Domain size (actual system is this**3)
 0.410                 θs : Saturated moisture contents
 0.095                 θr : Residual moisture contents
@@ -6,3 +6,16 @@
 1.0                   β  : van Genuchten empirical parameter
 1.0                   γ  : van Genuchten empirical parameter
 0.062                 Ks : Saturated hydraulic conductivity
+100                   Tmax : Maximum time of simulation
+200                   Nt : Number of time steps
+100                   Max. number of nonlinear iterations
+1e-10                 Tolerance for the Newton Method
+0.0                   Stopping tolerance on the min. scaled steplength 0.0 def
+BICGSTAB              Iterative method BICGSTAB CGS  BICG BICGSTABL RGMRES
+ML                    Preconditioner NONE  DIAG  BJAC ML
+CSR                   A Storage format CSR COO JAD
+1                     Stopping criterion
+80                    MAXIT
+01                    ITRACE
+20                    IRST    restart for RGMRES  and BiCGSTABL
+1e-14                 Tolerance for the Krylov Method

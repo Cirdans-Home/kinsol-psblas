@@ -55,6 +55,8 @@
  static int funcprpr(N_Vector u, N_Vector fval, void *user_data);
  static int jac(N_Vector y, N_Vector f, SUNMatrix J,
                 void *user_data, N_Vector tmp1, N_Vector tmp2);
+ static int check_flag(void *flagvalue, const char *funcname, int opt, int id);
+
 
  /*-------------------------------------------------
   * Routine to read input from file
@@ -92,30 +94,43 @@
     psb_i_t idim;         // Number of dofs in one direction
     psb_i_t nl;           // Number of blocks in the distribution
     psb_d_t thetas, thetar, alpha, beta, gamma, Ks; // Problem Parameters
+    psb_d_t dt;
+    N_Vector *oldpressure; // Old Pressure value for Euler Time-Stepping
   };
 
  #define NBMAX       20
 
  int main(int argc, char *argv[]){
 
+    void *kmem;                              /* Pointer to KINSOL memory    */
+    SUNLinearSolver LS;                      /* linear solver object        */
+    psb_c_SolverOptions options;             /* Solver options              */
     struct user_data_for_f user_data;        /* User data for computing F,J */
     /* BLOCK data distribution */
     psb_l_t ng,nl,*vl;
     psb_i_t nb;
     psb_l_t ix, iy, iz, el, glob_row;
     psb_l_t irow[10*NBMAX], icol[10*NBMAX];
+    /* Problem data */
+    N_Vector     u,constraints,su,sc;
+    SUNMatrix    J;
     /* Input from file */
-    psb_i_t nparms,idim;
-    psb_d_t thetas, thetar, alpha, beta, gamma, Ks;
+    psb_i_t nparms, idim, Nt, newtonmaxit, istop, itmax, itrace, irst;
+    psb_d_t thetas, thetar, alpha, beta, gamma, Ks, Tmax, tol;
+    double  fnormtol, scsteptol;
+    char methd[20],ptype[20],afmt[8]; /* Solve method, p. type, matrix format */
     /* Parallel Environment */
     psb_i_t ictxt,iam,np;
     psb_c_descriptor *cdh;
-
+    /* Time Stepping */
+    psb_d_t dt;
     /* Auxiliary variable */
     int i,k;
     /* Flags */
     psb_i_t info;
     bool verbose = SUNFALSE;
+    /* Set global strategy flag */
+    int globalstrategy = KIN_NONE;
 
     ictxt = psb_c_init();
     psb_c_info(ictxt,&iam,&np);
@@ -139,6 +154,19 @@
       get_dparm(stdin,&beta);
       get_dparm(stdin,&gamma);
       get_dparm(stdin,&Ks);
+      get_dparm(stdin,&Tmax);
+      get_iparm(stdin,&Nt);
+      get_iparm(stdin,&newtonmaxit);
+      get_dparm(stdin,&fnormtol);
+      get_dparm(stdin,&scsteptol);
+      get_hparm(stdin,methd);
+      get_hparm(stdin,ptype);
+      get_hparm(stdin,afmt);
+      get_iparm(stdin,&istop);
+      get_iparm(stdin,&itmax);
+      get_iparm(stdin,&itrace);
+      get_iparm(stdin,&irst);
+      get_dparm(stdin,&tol);
       fprintf(stdout, "\nModel Parameters:\n");
       fprintf(stdout, "Saturated moisture contents        : %f\n",thetar);
       fprintf(stdout, "Residual moisture contents         : %f\n",thetas);
@@ -155,6 +183,19 @@
    psb_c_dbcast(ictxt,1,&beta,0);
    psb_c_dbcast(ictxt,1,&gamma,0);
    psb_c_dbcast(ictxt,1,&Ks,0);
+   psb_c_dbcast(ictxt,1,&Tmax,0);
+   psb_c_ibcast(ictxt,1,&Nt,0);
+   psb_c_ibcast(ictxt,1,&newtonmaxit,0);
+   psb_c_dbcast(ictxt,1,&fnormtol,0);
+   psb_c_dbcast(ictxt,1,&scsteptol,0);
+   psb_c_hbcast(ictxt,methd,0);
+   psb_c_hbcast(ictxt,ptype,0);
+   psb_c_hbcast(ictxt,afmt,0);
+   psb_c_ibcast(ictxt,1,&istop,0);
+   psb_c_ibcast(ictxt,1,&itmax,0);
+   psb_c_ibcast(ictxt,1,&itrace,0);
+   psb_c_ibcast(ictxt,1,&irst,0);
+   psb_c_dbcast(ictxt,1,&tol,0);
 
     /* Perform a 3D BLOCK data distribution */
     if(iam==0){
@@ -240,24 +281,104 @@
 
    if ((info=psb_c_cdasb(cdh))!=0)  return(info);
 
+   /*-------------------------------------------------------
+    * Linear Solver Setup and construction
+    *-------------------------------------------------------*/
+    psb_c_DefaultSolverOptions(&options);
+    options.eps    = tol;
+    options.itmax  = itmax;
+    options.irst   = irst;
+    options.itrace = 1;
+    options.istop  = istop;
+    /* Create PSBLAS/MLD2P4 linear solver */
+    LS = SUNLinSol_PSBLAS(options, methd, ptype, ictxt);
+    if(check_flag((void *)LS, "SUNLinSol_PSBLAS", 0, iam)) psb_c_abort(ictxt);
+
+    SUNLinSolInitialize_PSBLAS(LS);
+    info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
+    if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
+    info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
+    if (check_flag(&info, "SUB_FILLIN", 1, iam)) psb_c_abort(ictxt);
+    info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SOLVE","BJAC");
+    if (check_flag(&info, "COARSE_SOLVE", 1, iam)) psb_c_abort(ictxt);
+    info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
+    if (check_flag(&info, "COARSE_SUBSOLVE", 1, iam)) psb_c_abort(ictxt);
 
 
+   /*-------------------------------------------------------
+    * Solution vector and auxiliary data
+    *------------------------------------------------------*/
+    constraints = NULL;
+    constraints = N_VNew_PSBLAS(ictxt, cdh);
+    u = NULL;
+    u = N_VNew_PSBLAS(ictxt, cdh);
+    sc = NULL;
+    sc = N_VNew_PSBLAS(ictxt, cdh);
+    su = NULL;
+    su = N_VNew_PSBLAS(ictxt, cdh);
+    J = NULL;
+    J = SUNPSBLASMatrix(ictxt, cdh);
+    user_data.oldpressure = &u;
+
+    N_VConst(0.0,constraints);
+    N_VConst(1.0,u);
+    N_VConst(1.0,sc);
+    N_VConst(1.0,su);
+
+   /*-------------------------------------------------------
+    * We can now initialize the time loop
+    -------------------------------------------------------*/
+   dt = Tmax/(Nt+1);
+   user_data.dt = dt;
+   /* Initialization of the nonlinear solver */
+   kmem = KINCreate();
+   info = KINInit(kmem, funcprpr, u);
+   if (check_flag(&info, "KINInit", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetNumMaxIters(kmem, newtonmaxit);
+   if (check_flag(&info, "KINSetNumMaxIters", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetPrintLevel(kmem, 0);
+   if (check_flag(&info, "KINSetPrintLevel", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetUserData(kmem, &user_data);
+   if (check_flag(&info, "KINSetUserData", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetConstraints(kmem, constraints);
+   if (check_flag(&info, "KINSetConstraints", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetFuncNormTol(kmem, fnormtol);
+   if (check_flag(&info, "KINSetFuncNormTol", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetScaledStepTol(kmem, scsteptol);
+   if (check_flag(&info, "KINSetScaledStepTol", 1, iam)) psb_c_abort(ictxt);
+   /* Attach the linear solver to KINSOL and set its options */
+   info = KINSetLinearSolver(kmem, LS, J);
+   if (check_flag(&info, "KINSetLinearSolver", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetJacFn(kmem,jac);
+   if (check_flag(&info, "KINSetJacFn", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetEtaForm(kmem,KIN_ETACONSTANT);
+   if (check_flag(&info, "KINSetEtaForm", 1, iam)) psb_c_abort(ictxt);
+   info = KINSetEtaConstValue(kmem,options.eps);
+   if (check_flag(&info, "KINSetEtaConstValue", 1, iam)) psb_c_abort(ictxt);
+
+   // info = KINSol(kmem,           /* KINSol memory block */
+   //               u,              /* initial guess on input; solution vector */
+   //               globalstrategy, /* global strategy choice */
+   //               su,             /* scaling vector for the variable u */
+   //               sc);            /* scaling vector for function values fval */
 
 
+   for(i=1;i==Nt+1;i++){  // Main Time Loop
 
+   }
 
+   /* Free the Memory */
+   KINFree(&kmem);
+   N_VDestroy(u);
+   N_VDestroy(constraints);
+   SUNMatDestroy(J);
+   SUNLinSolFree(LS);
+   free(cdh);
 
+   psb_c_barrier(ictxt);
+   psb_c_exit(ictxt);
 
-
-
-
-
-    free(cdh);
-
-    psb_c_barrier(ictxt);
-    psb_c_exit(ictxt);
-
-    return(0);
+   return(info);
 }
 
 /*
@@ -269,9 +390,14 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
 {
 /* This function returns the evaluation fval = \Phi(u;parameters) to march the
    Newton method.                                                             */
+   struct user_data_for_f *input = user_data;
+   psb_i_t iam, np, ictxt, idim, nl;
+   psb_i_t info;
+
+   info = 0;
 
 
-  return(0);
+  return(info);
 }
 
 static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
@@ -347,4 +473,42 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   if ((info=psb_c_dspasb(SM_PMAT_P(J),SM_DESCRIPTOR_P(J)))!=0)  return(info);
 
   return(info);
+}
+
+/*--------------------------------------------------------
+ * KINSOL FLAG AND OUTPUT ROUTINES
+ *-------------------------------------------------------*/
+
+static int check_flag(void *flagvalue, const char *funcname, int opt, int id)
+{
+  int *errflag;
+
+  /* Check if SUNDIALS function returned NULL pointer - no memory allocated */
+  if (opt == 0 && flagvalue == NULL) {
+    fprintf(stderr,
+            "\nSUNDIALS_ERROR(%d): %s() failed - returned NULL pointer\n\n",
+	    id, funcname);
+    return(1);
+  }
+
+  /* Check if flag < 0 */
+  else if (opt == 1) {
+    errflag = (int *) flagvalue;
+    if (*errflag < 0) {
+      fprintf(stderr,
+              "\nSUNDIALS_ERROR(%d): %s() failed with flag = %d\n\n",
+	      id, funcname, *errflag);
+      return(1);
+    }
+  }
+
+  /* Check if function returned NULL pointer - no memory allocated */
+  else if (opt == 2 && flagvalue == NULL) {
+    fprintf(stderr,
+            "\nMEMORY_ERROR(%d): %s() failed - returned NULL pointer\n\n",
+	    id, funcname);
+    return(1);
+  }
+
+  return(0);
 }
