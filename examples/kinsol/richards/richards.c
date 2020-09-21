@@ -408,10 +408,15 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
 /* This function returns the evaluation fval = \Phi(u;parameters) to march the
    Newton method.                                                             */
    struct user_data_for_f *input = user_data;
+   N_Vector *uold;
    psb_i_t iam, np, ictxt, idim, nl;
-   psb_i_t info;
+   psb_i_t i, k, info;
+   psb_l_t ix, iy, iz, glob_row, irow[1];
+   double x, y, z, deltah, sqdeltah, deltah2;
+   double val[1];
+
    /* Problem parameters */
-   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks;
+   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt;
 
    /* Load problem parameters */
    thetas = input->thetas;
@@ -421,9 +426,55 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    gamma  = input->gamma;
    a      = input->a;
    Ks     = input->Ks;
+   uold   = input->oldpressure;
+   dt     = input->dt;
 
    info = 0;
 
+   idim = input->idim;
+   nl = input->nl;
+
+   for (i=0; i<nl;  i++) {
+     glob_row=input->vl[i];                 // Get the index of the global row
+     ix = glob_row/(idim*idim);             // Get the index of the local elem
+     iy = (glob_row-ix*idim*idim)/idim;
+     iz = glob_row-ix*idim*idim-iy*idim;
+
+     // We compute the result of Φ(p) by first going back to the (i,j,k)
+     // indexing and substiting the value of p[i,j,k] on the boundary with the
+     // correct values, otherwise we use the entries stored in u, together with
+     // the halo values to produce the NVector fval = Φ(p). Another way of doing
+     // this would be assembling every time a bunch of temporary matrices
+     // with the values of the nonlinear evaluations and doing some
+     // matrix-vector products. This way should be faster, and less taxing on
+     // the memory.
+     if (ix==0) {             // Cannot do i-1
+       val[0] = 0.0;
+     }
+     else if (iy == 0){       // Cannot do j-1
+       val[0] = 0.0;
+     }
+     else if (iz == 0){       // Cannot do k-1
+       val[0] = 0.0;
+     }
+     else if (ix == idim -1){ // Cannot do i+1
+       val[0] = 0.0;
+     }
+     else if (iy == idim -1){ // Cannot do j+1
+       val[0] = 0.0;
+     }
+     else if (iz == idim - 1){ // Cannot do k+1
+       val[0] = 0.0;
+     }else{                    // We are inside the domain, no boundary here!
+       val[0] = 1/dt*(Sfun((N_VGetArrayPointer(u))[i],alpha,beta,thetas,thetar)
+        - Sfun((N_VGetArrayPointer(*uold))[i],alpha,beta,thetas,thetar));
+     }
+     irow[0] = glob_row;
+     psb_c_dgeins(1,irow,val,NV_PVEC_P(fval),NV_DESCRIPTOR_P(fval));
+   }
+
+   // We assemble the vector at the end
+   N_VAsb_PSBLAS(fval);
 
   return(info);
 }
