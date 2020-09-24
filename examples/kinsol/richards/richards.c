@@ -121,7 +121,7 @@
     struct user_data_for_f user_data;        /* User data for computing F,J */
     /* BLOCK data distribution */
     psb_l_t ng,nl,*vl;
-    psb_i_t nb;
+    psb_i_t nb,sizes[3],ijk[3],ijkinsert[3];
     psb_l_t ix, iy, iz, el, glob_row;
     psb_l_t irow[10*NBMAX], icol[10*NBMAX];
     /* Problem data */
@@ -218,20 +218,22 @@
       fprintf(stdout, "\nStarting 3D BLOCK data distribution\n");
       fflush(stdout);
     }
+    psb_c_barrier(ictxt);
     cdh = psb_c_new_descriptor();
+    psb_c_set_index_base(0);
     ng = ((psb_l_t) idim)*idim*idim;
     nb = (ng+np-1)/np;
     nl = nb;
     if ( (ng -iam*nb) < nl) nl = ng -iam*nb;
       fprintf(stderr,"%d: Input data %d %ld %d %ld\n",iam,idim,ng,nb, nl);
-    if ((vl=malloc(nb*sizeof(psb_l_t)))==NULL) {
+    if ((vl=malloc((nb+1)*sizeof(psb_l_t)))==NULL) {
       fprintf(stderr,"On %d: malloc failure\n",iam);
       psb_c_abort(ictxt);
    }
    i = ((psb_l_t)iam) * nb;
-   for (k=0; k<nl; k++)
-   vl[k] = i+k;
-
+   for (k=0; k<= nl; k++){
+    vl[k] = i+k;
+   }
    if ((info=psb_c_cdall_vl(nl,vl,ictxt,cdh))!=0) {
       fprintf(stderr,"From cdall: %d\nBailing out\n",info);
       psb_c_abort(ictxt);
@@ -252,43 +254,50 @@
    /*We need to reuse the same communicator many times, namely every time we
    need to populate a new Jacobian. Therefore we use the psb_c_cdins routine
    to generate the distributed adjacency graph for our problem.              */
-   for (i=0; i<nl;  i++) {
+   sizes[0] = idim; sizes[1] = idim; sizes[2] = idim;
+   for (i=0; i <= nl;  i++) {
      glob_row=vl[i];
      el = 0;
-     ix = glob_row/(idim*idim);
-     iy = (glob_row-ix*idim*idim)/idim;
-     iz = glob_row-ix*idim*idim-iy*idim;
+     psb_c_l_idx2ijk(ijk,glob_row,sizes,3,0);
+     ix = ijk[0]; iy = ijk[1]; iz = ijk[2];
      /*  term depending on   (i-1,j,k)        */
      if(ix != 0){
-       icol[el]=(ix-1)*idim*idim+(iy)*idim+(iz);
+       ijkinsert[0]=ix-1; ijkinsert[1]=iy; ijkinsert[2]=iz;
+       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
        el=el+1;
      }
      /*  term depending on     (i,j-1,k)        */
      if (iy != 0){
-       icol[el]=(ix)*idim*idim+(iy-1)*idim+(iz);
+       ijkinsert[0]=ix; ijkinsert[1]=iy-1; ijkinsert[2]=iz;
+       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
        el=el+1;
      }
      /* term depending on      (i,j,k-1)        */
      if (iz != 0){
-       icol[el]=(ix)*idim*idim+(iy)*idim+(iz-1);
+       ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz-1;
+       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
        el=el+1;
      }
      /* term depending on      (i,j,k)          */
-     icol[el]=(ix)*idim*idim+(iy)*idim+(iz);
+     ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz;
+     icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
      el=el+1;
      /*  term depending on     (i+1,j,k)        */
      if (iz != idim-1) {
-       icol[el]=(ix)*idim*idim+(iy)*idim+(iz+1);
+       ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz+1;
+       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
        el=el+1;
      }
      /*  term depending on     (i,j+1,k)        */
      if (iy != idim-1){
-       icol[el]=(ix)*idim*idim+(iy+1)*idim+(iz);
+       ijkinsert[0]=ix-1; ijkinsert[1]=iy+1; ijkinsert[2]=iz;
+       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
        el=el+1;
      }
      /* term depending on      (i,j,k+1)        */
      if (ix != idim-1){
-       icol[el]=(ix+1)*idim*idim+(iy)*idim+(iz);
+       ijkinsert[0]=ix+1; ijkinsert[1]=iy; ijkinsert[2]=iz;
+       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
        el=el+1;
      }
      for (k=0; k<el; k++) irow[k]=glob_row;
@@ -297,6 +306,10 @@
    }
 
    if ((info=psb_c_cdasb(cdh))!=0)  return(info);
+
+   if (iam == 0){
+     printf("Built communicator on %ld global rows\n",psb_c_cd_get_global_rows(cdh));
+   }
 
    /*-------------------------------------------------------
     * Linear Solver Setup and construction
@@ -379,6 +392,7 @@
    //               su,             /* scaling vector for the variable u */
    //               sc);            /* scaling vector for function values fval */
 
+   funcprpr(u, sc, &user_data);
 
    for(i=1;i==Nt+1;i++){  // Main Time Loop
 
@@ -411,9 +425,10 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    N_Vector *uold;
    psb_i_t iam, np, ictxt, idim, nl;
    psb_i_t i, k, info;
-   psb_l_t ix, iy, iz, glob_row, irow[1];
+   psb_l_t glob_row, irow[1];
    double x, y, z, deltah, sqdeltah, deltah2;
-   double val[1];
+   double val[1],entries[8];
+   psb_i_t ix, iy, iz, ijk[3],sizes[3];
 
    /* Problem parameters */
    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt;
@@ -434,12 +449,20 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    idim = input->idim;
    nl = input->nl;
 
+   // Who am I?
+   psb_c_info(NV_ICTXT_P(u),&iam,&np);
+   psb_c_set_index_base(0);
+
+   deltah = (double) 1.0/(idim+1);
+   sqdeltah = deltah*deltah;
+   deltah2  = 2.0* deltah;
+   sizes[0] = idim; sizes[1] = idim; sizes[2] = idim;
+
    for (i=0; i<nl;  i++) {
      glob_row=input->vl[i];                 // Get the index of the global row
-     ix = glob_row/(idim*idim);             // Get the index of the local elem
-     iy = (glob_row-ix*idim*idim)/idim;
-     iz = glob_row-ix*idim*idim-iy*idim;
-
+     // We compute the local indexes of the elements on the stencil
+     psb_c_l_idx2ijk(ijk,glob_row,sizes,3,0);
+     ix = ijk[0]; iy = ijk[1]; iz = ijk[2];
      // We compute the result of Φ(p) by first going back to the (i,j,k)
      // indexing and substiting the value of p[i,j,k] on the boundary with the
      // correct values, otherwise we use the entries stored in u, together with
@@ -448,27 +471,75 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
      // with the values of the nonlinear evaluations and doing some
      // matrix-vector products. This way should be faster, and less taxing on
      // the memory.
-     if (ix==0) {             // Cannot do i-1
-       val[0] = 0.0;
+     entries[0] = psb_c_dgetelem(NV_PVEC_P((*uold)),glob_row,
+                                 NV_DESCRIPTOR_P((*uold))); // u^(l-1)_{i,j,k}
+     entries[1] = psb_c_dgetelem(NV_PVEC_P(u),glob_row,
+                                  NV_DESCRIPTOR_P(u)); // u^(l)_{i,j,k}
+     if (ix == 0) {        // Cannot do i-1
+       entries[2] = 0.0; // u^(l)_{i-1,j,k}
+     }else{
+       ijk[0] = ix - 1; ijk[1] = iy; ijk[2] = iz;
+       entries[2] = psb_c_dgetelem(NV_PVEC_P(u),
+                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                   NV_DESCRIPTOR_P(u)); // u^(l)_{i-1,j,k}
      }
-     else if (iy == 0){       // Cannot do j-1
-       val[0] = 0.0;
+     if (ix == idim -1){
+       entries[3] = 0.0;
+     }else{
+       ijk[0] = ix+1; ijk[1] = iy; ijk[2] = iz;
+       entries[3] = psb_c_dgetelem(NV_PVEC_P(u),
+                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                   NV_DESCRIPTOR_P(u));  // u^(l)_{i+1,j,k}
      }
-     else if (iz == 0){       // Cannot do k-1
-       val[0] = 0.0;
+     if (iy == 0){       // Cannot do j-1
+       entries[4] = 0.0; // u^(l)_{i+1,j,k}
+     }else{
+       ijk[0] = ix; ijk[1] = iy-1; ijk[2] = iz;
+       entries[4] = psb_c_dgetelem(NV_PVEC_P(u),
+                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                   NV_DESCRIPTOR_P(u));  // u^(l)_{i,j-1,k}
      }
-     else if (ix == idim -1){ // Cannot do i+1
-       val[0] = 0.0;
+     if (iy == idim -1){
+       entries[5] = 0.0;
+     }else{
+       ijk[0] = ix; ijk[1] = iy+1; ijk[2] = iz;
+       entries[5] = psb_c_dgetelem(NV_PVEC_P(u),
+                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                   NV_DESCRIPTOR_P(u));  // u^(l)_{i,j+1,k}
      }
-     else if (iy == idim -1){ // Cannot do j+1
-       val[0] = 0.0;
+     if (iz == 0){       // Cannot do k-1
+       entries[6] = 0.0;
+     }else{
+       ijk[0] = ix; ijk[1] = iy; ijk[2] = iz-1;
+       entries[6] = psb_c_dgetelem(NV_PVEC_P(u),
+                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                   NV_DESCRIPTOR_P(u));  // u^(l)_{i,j,k-1}
      }
-     else if (iz == idim - 1){ // Cannot do k+1
-       val[0] = 0.0;
-     }else{                    // We are inside the domain, no boundary here!
-       val[0] = 1/dt*(Sfun((N_VGetArrayPointer(u))[i],alpha,beta,thetas,thetar)
-        - Sfun((N_VGetArrayPointer(*uold))[i],alpha,beta,thetas,thetar));
+     if (iz == idim -1){ // Cannot do k+1
+       entries[7] = 0.0;
+     }else{
+       ijk[0] = ix; ijk[1] = iy; ijk[2] = iz+1;
+       entries[7] = psb_c_dgetelem(NV_PVEC_P(u),
+                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                   NV_DESCRIPTOR_P(u));  // u^(l)_{i,j,k+1}
      }
+     // We have now recovered all the entries, and we can compute the glob_rowth
+     // entry of the funciton
+     val[0] = 1/dt*(Sfun(entries[0],alpha,beta,thetas,thetar)
+      - Sfun(entries[1],alpha,beta,thetas,thetar))
+      - 1.0/deltah2*( 2*(entries[1]-entries[2])/(1.0/Kfun(entries[1],a,gamma,Ks)
+        + 1.0/Kfun(entries[2],a,gamma,Ks)) + 2*(entries[3]-entries[1])/
+        (1.0/Kfun(entries[3],a,gamma,Ks)
+          + 1.0/Kfun(entries[1],a,gamma,Ks)) )
+      - 1.0/deltah2*( 2*(entries[1]-entries[4])/(1.0/Kfun(entries[1],a,gamma,Ks)
+        + 1.0/Kfun(entries[4],a,gamma,Ks)) + 2*(entries[5]-entries[1])/
+        (1.0/Kfun(entries[5],a,gamma,Ks)
+            + 1.0/Kfun(entries[1],a,gamma,Ks)) )
+      - 1.0/deltah2*( 2*(entries[1]-entries[6])/(1.0/Kfun(entries[1],a,gamma,Ks)
+        + 1.0/Kfun(entries[6],a,gamma,Ks)) + 2*(entries[7]-entries[1])/
+        (1.0/Kfun(entries[7],a,gamma,Ks)
+          + 1.0/Kfun(entries[1],a,gamma,Ks)) )
+      - 1.0/deltah2*(Kfun(entries[7],a,gamma,Ks) - Kfun(entries[6],a,gamma,Ks));
      irow[0] = glob_row;
      psb_c_dgeins(1,irow,val,NV_PVEC_P(fval),NV_DESCRIPTOR_P(fval));
    }
@@ -517,7 +588,6 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   deltah = (double) 1.0/(idim+1);
   sqdeltah = deltah*deltah;
   deltah2  = 2.0* deltah;
-  psb_c_set_index_base(0);
   for (i=0; i<nl;  i++) {
     glob_row=input->vl[i];
     el=0;
