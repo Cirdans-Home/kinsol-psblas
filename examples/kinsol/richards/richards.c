@@ -108,7 +108,8 @@
     psb_i_t nl;           // Number of blocks in the distribution
     psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks; // Problem Parameters
     psb_d_t dt;
-    N_Vector *oldpressure; // Old Pressure value for Euler Time-Stepping
+    N_Vector *oldpressure;// Old Pressure value for Euler Time-Stepping
+    psb_i_t timestep;     // Actual time-step
   };
 
  #define NBMAX       20
@@ -144,6 +145,8 @@
     bool verbose = SUNFALSE;
     /* Set global strategy flag */
     int globalstrategy = KIN_NONE;
+    /* Performance variables */
+    psb_d_t tic, toc, timecdh;
 
     ictxt = psb_c_init();
     psb_c_info(ictxt,&iam,&np);
@@ -305,10 +308,15 @@
       fprintf(stderr,"From psb_c_cdins: %d\n",info);
    }
 
+   tic = psb_c_wtime();
    if ((info=psb_c_cdasb(cdh))!=0)  return(info);
+   toc = psb_c_wtime();
+   timecdh = toc-tic;
+
 
    if (iam == 0){
      printf("Built communicator on %ld global rows\n",psb_c_cd_get_global_rows(cdh));
+     fprintf(stdout,"Communicator Building time: %lf s\n",timecdh);
    }
 
    /*-------------------------------------------------------
@@ -392,9 +400,11 @@
    //               su,             /* scaling vector for the variable u */
    //               sc);            /* scaling vector for function values fval */
 
-   funcprpr(u, sc, &user_data);
-
    for(i=1;i==Nt+1;i++){  // Main Time Loop
+     user_data.timestep = i;
+
+     info = KINSetUserData(kmem, &user_data);
+     if (check_flag(&info, "KINSetUserData", 1, iam)) psb_c_abort(ictxt);
 
    }
 
@@ -402,6 +412,8 @@
    KINFree(&kmem);
    N_VDestroy(u);
    N_VDestroy(constraints);
+   N_VDestroy(sc);
+   N_VDestroy(su);
    SUNMatDestroy(J);
    SUNLinSolFree(LS);
    free(cdh);
@@ -556,14 +568,18 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   /* This function returns the evaluation of the Jacobian of the system upon
   request of the Newton method.                                               */
   struct user_data_for_f *input = user_data;
+  N_Vector *uold;
   psb_i_t iam, np, ictxt, idim, nl;
-  psb_l_t ix, iy, iz, el,glob_row;
-  psb_i_t i, k, info,ret;
+  psb_i_t i, k, info, el;
+  psb_l_t glob_row, irow[10*NBMAX], icol[10*NBMAX];
   double x, y, z, deltah, sqdeltah, deltah2;
-  double val[10*NBMAX], zt[NBMAX];
-  psb_l_t irow[10*NBMAX], icol[10*NBMAX];
+  double val[10*NBMAX],entries[8];
+  psb_i_t ix, iy, iz, ijk[3],ijkinsert[3],sizes[3];
+
   /* Problem parameters */
-  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks;
+  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt;
+  /* Timings */
+  psb_d_t tic, toc, timecdh;
 
   /* Load problem parameters */
   thetas = input->thetas;
@@ -573,54 +589,195 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   gamma  = input->gamma;
   a      = input->a;
   Ks     = input->Ks;
+  uold   = input->oldpressure;
+  dt     = input->dt;
 
   info = 0;
-  // Who am I?
-  psb_c_info(SM_ICTXT_P(J),&iam,&np);
-  if(iam == 0){
-    fprintf(stdout,"\tBuilding a new Jacobian\n");
-    fflush(stdout);
-  }
-  SUNMatZero(J); // We put to zero the old Jacobian to reuse the structure
+
   idim = input->idim;
   nl = input->nl;
+
+  // Who am I?
+  psb_c_info(NV_ICTXT_P(yvec),&iam,&np);
+  psb_c_set_index_base(0);
 
   deltah = (double) 1.0/(idim+1);
   sqdeltah = deltah*deltah;
   deltah2  = 2.0* deltah;
+  sizes[0] = idim; sizes[1] = idim; sizes[2] = idim;
+
   for (i=0; i<nl;  i++) {
-    glob_row=input->vl[i];
-    el=0;
-    // We get the local indexes:
-    ix = glob_row/(idim*idim);
-    iy = (glob_row-ix*idim*idim)/idim;
-    iz = glob_row-ix*idim*idim-iy*idim;
-    /*  Internal point: Build Discretization   */
-    /*  term depending on     (i-1,j,k)        */
+    glob_row=input->vl[i];                 // Get the index of the global row
+    // We compute the local indexes of the elements on the stencil
+    psb_c_l_idx2ijk(ijk,glob_row,sizes,3,0);
+    ix = ijk[0]; iy = ijk[1]; iz = ijk[2];
+    el = 0;
 
+    /* To compute the expression of the Jacobian for Φ we first need to access
+    the entries for the current iterate, these are contained in the N_Vector
+    yvec. Another way of doing this would be assembling every time a bunch of
+    temporary matrices with the values of the nonlinear evaluations and doing
+    some matrix-matrix operationss. This way should be faster, and less taxing
+    on the memory.                                                            */
+    entries[1] = psb_c_dgetelem(NV_PVEC_P(yvec),glob_row,
+                                 NV_DESCRIPTOR_P(yvec)); // u^(l)_{i,j,k}
+    if (ix == 0) {        // Cannot do i-1
+      entries[2] = 0.0; // u^(l)_{i-1,j,k}
+    }else{
+      ijk[0] = ix - 1; ijk[1] = iy; ijk[2] = iz;
+      entries[2] = psb_c_dgetelem(NV_PVEC_P(yvec),
+                                  psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                  NV_DESCRIPTOR_P(yvec)); // u^(l)_{i-1,j,k}
+    }
+    if (ix == idim -1){
+      entries[3] = 0.0;
+    }else{
+      ijk[0] = ix+1; ijk[1] = iy; ijk[2] = iz;
+      entries[3] = psb_c_dgetelem(NV_PVEC_P(yvec),
+                                  psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                  NV_DESCRIPTOR_P(yvec));  // u^(l)_{i+1,j,k}
+    }
+    if (iy == 0){       // Cannot do j-1
+      entries[4] = 0.0; // u^(l)_{i+1,j,k}
+    }else{
+      ijk[0] = ix; ijk[1] = iy-1; ijk[2] = iz;
+      entries[4] = psb_c_dgetelem(NV_PVEC_P(yvec),
+                                  psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                  NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j-1,k}
+    }
+    if (iy == idim -1){
+      entries[5] = 0.0;
+    }else{
+      ijk[0] = ix; ijk[1] = iy+1; ijk[2] = iz;
+      entries[5] = psb_c_dgetelem(NV_PVEC_P(yvec),
+                                  psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                  NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j+1,k}
+    }
+    if (iz == 0){       // Cannot do k-1
+      entries[6] = 0.0;
+    }else{
+      ijk[0] = ix; ijk[1] = iy; ijk[2] = iz-1;
+      entries[6] = psb_c_dgetelem(NV_PVEC_P(yvec),
+                                  psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                  NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j,k-1}
+    }
+    if (iz == idim -1){ // Cannot do k+1
+      entries[7] = 0.0;
+    }else{
+      ijk[0] = ix; ijk[1] = iy; ijk[2] = iz+1;
+      entries[7] = psb_c_dgetelem(NV_PVEC_P(yvec),
+                                  psb_c_l_ijk2idx(ijk,sizes,3,0),
+                                  NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j,k+1}
+    }
+    /* Now that we have all the entries of yvec needed to compute the entries
+    of the current row of the Jacobian we can loop through the different nonzero
+    elements and compute the relative values.                                 */
+    /*  term depending on   (i-1,j,k)        */
+    val[el] = 2.0*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
+      (Kfun(entries[2],a,gamma,Ks)+(entries[2]-entries[1])
+      *Kfunprime(entries[2],a,gamma,Ks) ) + pow(Kfun(entries[2],a,gamma,Ks),2))
+      /( sqdeltah*pow(Kfun(entries[2],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    if(ix != 0){
+      ijkinsert[0]=ix-1; ijkinsert[1]=iy; ijkinsert[2]=iz;
+      icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+      el=el+1;
+    }
     /*  term depending on     (i,j-1,k)        */
-
+    val[el] = 2.0*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
+      (Kfun(entries[4],a,gamma,Ks)+(entries[4]-entries[1])
+      *Kfunprime(entries[4],a,gamma,Ks) ) + pow(Kfun(entries[4],a,gamma,Ks),2))
+      /( sqdeltah*pow(Kfun(entries[4],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    if (iy != 0){
+      ijkinsert[0]=ix; ijkinsert[1]=iy-1; ijkinsert[2]=iz;
+      icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+      el=el+1;
+    }
     /* term depending on      (i,j,k-1)        */
-
+    val[el] = Kfunprime(entries[6],a,gamma,Ks)/deltah2 - (
+      -2.0/(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[6],a,gamma,Ks))
+      +(2.0*(entries[1]-entries[6])*Kfunprime(entries[6],a,gamma,Ks))/
+       (pow(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[6],a,gamma,Ks),2)*
+        pow(Kfun(entries[6],a,gamma,Ks),2)))/sqdeltah;
+    if (iz != 0){
+      ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz-1;
+      icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+      el=el+1;
+    }
     /* term depending on      (i,j,k)          */
-
-
+    val[el] = -2.0/sqdeltah*( Kfunprime(entries[1],a,gamma,Ks)*
+            ( (entries[1]-entries[2])*pow(Kfun(entries[2],a,gamma,Ks),2)
+                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[2],a,gamma,Ks),2)
+            + (entries[3]-entries[1])*pow(Kfun(entries[3],a,gamma,Ks),2)
+                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[3],a,gamma,Ks),2) )
+           + Kfun(entries[1],a,gamma,Ks)*( Kfun(entries[2],a,gamma,Ks)
+              /(Kfun(entries[2],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
+              - Kfun(entries[3],a,gamma,Ks)
+                 /(Kfun(entries[3],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))))
+             -2.0/sqdeltah*( Kfunprime(entries[1],a,gamma,Ks)*
+             ( (entries[1]-entries[4])*pow(Kfun(entries[4],a,gamma,Ks),2)
+                 /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[4],a,gamma,Ks),2)
+             + (entries[5]-entries[1])*pow(Kfun(entries[5],a,gamma,Ks),2)
+                 /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[5],a,gamma,Ks),2) )
+            + Kfun(entries[1],a,gamma,Ks)*( Kfun(entries[4],a,gamma,Ks)
+               /(Kfun(entries[4],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
+               - Kfun(entries[5],a,gamma,Ks)
+                  /(Kfun(entries[5],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))));
+            -2.0/sqdeltah*( Kfunprime(entries[1],a,gamma,Ks)*
+            ( (entries[1]-entries[6])*pow(Kfun(entries[6],a,gamma,Ks),2)
+                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[6],a,gamma,Ks),2)
+            + (entries[7]-entries[1])*pow(Kfun(entries[7],a,gamma,Ks),2)
+                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[7],a,gamma,Ks),2) )
+           + Kfun(entries[1],a,gamma,Ks)*( Kfun(entries[6],a,gamma,Ks)
+              /(Kfun(entries[6],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
+              - Kfun(entries[7],a,gamma,Ks)
+                 /(Kfun(entries[7],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))))
+           +1/dt*Sfunprime(entries[1],alpha,beta,thetas,thetar);
+    ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz;
+    icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+    el=el+1;
     /*  term depending on     (i+1,j,k)        */
-
+    val[el] = -2*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
+      (Kfun(entries[3],a,gamma,Ks)+(entries[3]-entries[1])
+      *Kfunprime(entries[3],a,gamma,Ks) ) + pow(Kfun(entries[3],a,gamma,Ks),2))
+      /( sqdeltah*pow(Kfun(entries[3],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    if (iz != idim-1) {
+      ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz+1;
+      icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+      el=el+1;
+    }
     /*  term depending on     (i,j+1,k)        */
-
+    val[el] = -2.0*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
+      (Kfun(entries[5],a,gamma,Ks)+(entries[5]-entries[1])
+      *Kfunprime(entries[5],a,gamma,Ks) ) + pow(Kfun(entries[5],a,gamma,Ks),2))
+      /( sqdeltah*pow(Kfun(entries[5],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    if (iy != idim-1){
+      ijkinsert[0]=ix-1; ijkinsert[1]=iy+1; ijkinsert[2]=iz;
+      icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+      el=el+1;
+    }
     /* term depending on      (i,j,k+1)        */
-
-    /* Get the corresponding rows of the matrix */
+    val[el] = -Kfunprime(entries[7],a,gamma,Ks)/deltah2 - (
+      2.0/(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[7],a,gamma,Ks))
+      +(2.0*(entries[7]-entries[1])*Kfunprime(entries[7],a,gamma,Ks))/
+       (pow(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[7],a,gamma,Ks),2)*
+        pow(Kfun(entries[7],a,gamma,Ks),2)))/sqdeltah;
+    if (ix != idim-1){
+      ijkinsert[0]=ix+1; ijkinsert[1]=iy; ijkinsert[2]=iz;
+      icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
+      el=el+1;
+    }
     for (k=0; k<el; k++) irow[k]=glob_row;
     /* Insert the local portion into the Jacobian */
-    if ((ret=psb_c_dspins(el,irow,icol,val,SM_PMAT_P(J),SM_DESCRIPTOR_P(J)))!=0)
-      fprintf(stderr,"From psb_c_dspins: %d\n",ret);
+    if ((info=psb_c_dspins(el,irow,icol,val,SM_PMAT_P(J),SM_DESCRIPTOR_P(J)))!=0)
+     fprintf(stderr,"From psb_c_dspins: %d\n",info);
   }
 
   // Assemble and return
-  if ((info=psb_c_cdasb(SM_DESCRIPTOR_P(J)))!=0)  return(info);
+  // if ((info=psb_c_cdasb(SM_DESCRIPTOR_P(J)))!=0)  return(info);
+  tic = psb_c_wtime();
   if ((info=psb_c_dspasb(SM_PMAT_P(J),SM_DESCRIPTOR_P(J)))!=0)  return(info);
+  toc = psb_c_wtime();
+  if (iam == 0) fprintf(stdout, "Buit new Jacobian in %lf s\n",toc-tic);
 
   return(info);
 }
