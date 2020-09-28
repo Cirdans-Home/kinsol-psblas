@@ -1,4 +1,4 @@
-21                    Number of entries below this
+23                    Number of entries below this
 20                    Domain size (actual system is this**3)
 0.287                 θs : Saturated moisture contents
 0.075                 θr : Residual moisture contents
@@ -7,6 +7,8 @@
 1.175e6               a  : van Genuchten empirical parameter
 4.74                  γ  : van Genuchten empirical parameter
 9.44e-5               Ks : Saturated hydraulic conductivity
+1.0                   ρ  : Water density
+1.0                   ϕ  : Porosity of the medium
 100                   Tmax : Maximum time of simulation
 200                   Nt : Number of time steps
 100                   Max. number of nonlinear iterations

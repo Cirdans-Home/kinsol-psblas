@@ -106,7 +106,7 @@
     psb_l_t *vl;          // Local portion of the global indexs
     psb_i_t idim;         // Number of dofs in one direction
     psb_i_t nl;           // Number of blocks in the distribution
-    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks; // Problem Parameters
+    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, rho, phi; // Problem Parameters
     psb_d_t dt;
     N_Vector *oldpressure;// Old Pressure value for Euler Time-Stepping
     psb_i_t timestep;     // Actual time-step
@@ -130,7 +130,7 @@
     SUNMatrix    J;
     /* Input from file */
     psb_i_t nparms, idim, Nt, newtonmaxit, istop, itmax, itrace, irst;
-    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, Tmax, tol;
+    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, Tmax, tol, rho, phi;
     double  fnormtol, scsteptol;
     char methd[20],ptype[20],afmt[8]; /* Solve method, p. type, matrix format */
     /* Parallel Environment */
@@ -171,6 +171,8 @@
       get_dparm(stdin,&a);
       get_dparm(stdin,&gamma);
       get_dparm(stdin,&Ks);
+      get_dparm(stdin,&rho);
+      get_dparm(stdin,&phi);
       get_dparm(stdin,&Tmax);
       get_iparm(stdin,&Nt);
       get_iparm(stdin,&newtonmaxit);
@@ -188,6 +190,8 @@
       fprintf(stdout, "Saturated moisture contents        : %1.3f\n",thetar);
       fprintf(stdout, "Residual moisture contents         : %1.3f\n",thetas);
       fprintf(stdout, "Saturated hydraulic conductivity   : %1.3e\n",Ks);
+      fprintf(stdout, "Water density (ρ)                  : %1.3e\n",rho);
+      fprintf(stdout, "Porosity of the medium (ϕ)         : %1.3e\n",phi);
       fprintf(stdout, "                                   : (α        ,β    ,a        ,γ    )\n");
       fprintf(stdout, "van Genuchten empirical parameters : (%1.3e,%1.3f,%1.3e,%1.3f)\n",
         alpha,beta,a,gamma);
@@ -202,6 +206,8 @@
    psb_c_dbcast(ictxt,1,&a,0);
    psb_c_dbcast(ictxt,1,&gamma,0);
    psb_c_dbcast(ictxt,1,&Ks,0);
+   psb_c_dbcast(ictxt,1,&rho,0);
+   psb_c_dbcast(ictxt,1,&phi,0);
    psb_c_dbcast(ictxt,1,&Tmax,0);
    psb_c_ibcast(ictxt,1,&Nt,0);
    psb_c_ibcast(ictxt,1,&newtonmaxit,0);
@@ -253,6 +259,8 @@
    user_data.a      = a;
    user_data.gamma  = gamma;
    user_data.Ks     = Ks;
+   user_data.rho    = rho;
+   user_data.phi    = phi;
 
    /*We need to reuse the same communicator many times, namely every time we
    need to populate a new Jacobian. Therefore we use the psb_c_cdins routine
@@ -443,7 +451,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    psb_i_t ix, iy, iz, ijk[3],sizes[3];
 
    /* Problem parameters */
-   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt;
+   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt, rho, phi;
 
    /* Load problem parameters */
    thetas = input->thetas;
@@ -453,6 +461,8 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    gamma  = input->gamma;
    a      = input->a;
    Ks     = input->Ks;
+   rho    = input->rho;
+   phi    = input->phi;
    uold   = input->oldpressure;
    dt     = input->dt;
 
@@ -537,7 +547,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
      }
      // We have now recovered all the entries, and we can compute the glob_rowth
      // entry of the funciton
-     val[0] = 1/dt*(Sfun(entries[0],alpha,beta,thetas,thetar)
+     val[0] = (rho*phi)/dt*(Sfun(entries[0],alpha,beta,thetas,thetar)
       - Sfun(entries[1],alpha,beta,thetas,thetar))
       - 1.0/deltah2*( 2*(entries[1]-entries[2])/(1.0/Kfun(entries[1],a,gamma,Ks)
         + 1.0/Kfun(entries[2],a,gamma,Ks)) + 2*(entries[3]-entries[1])/
@@ -577,7 +587,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   psb_i_t ix, iy, iz, ijk[3],ijkinsert[3],sizes[3];
 
   /* Problem parameters */
-  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt;
+  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt, rho, phi;
   /* Timings */
   psb_d_t tic, toc, timecdh;
 
@@ -591,6 +601,8 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   Ks     = input->Ks;
   uold   = input->oldpressure;
   dt     = input->dt;
+  rho    = input->rho;
+  phi    = input->phi;
 
   info = 0;
 
@@ -731,7 +743,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
               /(Kfun(entries[6],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
               - Kfun(entries[7],a,gamma,Ks)
                  /(Kfun(entries[7],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))))
-           +1/dt*Sfunprime(entries[1],alpha,beta,thetas,thetar);
+           +(rho*phi)/dt*Sfunprime(entries[1],alpha,beta,thetas,thetar);
     ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz;
     icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
     el=el+1;
