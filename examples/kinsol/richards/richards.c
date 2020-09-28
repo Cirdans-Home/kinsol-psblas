@@ -70,6 +70,7 @@
                       double thetar);
   static double Kfunprime(double p, double a, double gamma, double Ks);
   static double sgn(double x);
+  static double source(double x, double y, double z, double t);
 
  /*-------------------------------------------------
   * Routine to read input from file
@@ -108,7 +109,7 @@
     psb_i_t nl;           // Number of blocks in the distribution
     psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, rho, phi; // Problem Parameters
     psb_d_t dt;
-    N_Vector *oldpressure;// Old Pressure value for Euler Time-Stepping
+    N_Vector oldpressure; // Old Pressure value for Euler Time-Stepping
     psb_i_t timestep;     // Actual time-step
   };
 
@@ -364,18 +365,18 @@
     su = N_VNew_PSBLAS(ictxt, cdh);
     J = NULL;
     J = SUNPSBLASMatrix(ictxt, cdh);
-    user_data.oldpressure = &u;
+    user_data.oldpressure = N_VNew_PSBLAS(ictxt, cdh);
 
-    N_VConst(0.0,constraints);
-    N_VConst(1.0,u);
-    N_VConst(1.0,sc);
-    N_VConst(1.0,su);
+    N_VConst(0.0,constraints);      // No constraints
+    N_VConst(1.0,sc);               // Unweighted norm
+    N_VConst(1.0,su);               // Unweighted norm
 
    /*-------------------------------------------------------
     * We can now initialize the time loop
     -------------------------------------------------------*/
    dt = Tmax/(Nt+1);
    user_data.dt = dt;
+   N_VConst(1.0,user_data.oldpressure);  // Initial Condition
    /* Initialization of the nonlinear solver */
    kmem = KINCreate();
    info = KINInit(kmem, funcprpr, u);
@@ -409,10 +410,18 @@
    //               sc);            /* scaling vector for function values fval */
 
    for(i=1;i==Nt+1;i++){  // Main Time Loop
-     user_data.timestep = i;
+     user_data.timestep = i; // used to compute time depending quantities
 
-     info = KINSetUserData(kmem, &user_data);
-     if (check_flag(&info, "KINSetUserData", 1, iam)) psb_c_abort(ictxt);
+     /* For Euler Time-Stepping we take note of the old pressure value */
+     // N_VLinearSum(1.0,u,0.0,user_data.oldpressure,user_data.oldpressure);
+
+     /* We perform the new incomplete Newton time step using as starting point
+     the solution at the previous time step.                                  */
+     // info = KINSol(kmem,           /* KINSol memory block */
+     //               u,              /* initial guess on input; solution vector */
+     //               globalstrategy, /* global strategy choice */
+     //               su,             /* scaling vector for the variable u */
+     //               sc);            /* scaling vector for function values fval */
 
    }
 
@@ -442,11 +451,11 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
 /* This function returns the evaluation fval = \Phi(u;parameters) to march the
    Newton method.                                                             */
    struct user_data_for_f *input = user_data;
-   N_Vector *uold;
+   N_Vector uold;
    psb_i_t iam, np, ictxt, idim, nl;
    psb_i_t i, k, info;
    psb_l_t glob_row, irow[1];
-   double x, y, z, deltah, sqdeltah, deltah2;
+   double x, y, z, t, deltah, sqdeltah, deltah2;
    double val[1],entries[8];
    psb_i_t ix, iy, iz, ijk[3],sizes[3];
 
@@ -485,6 +494,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
      // We compute the local indexes of the elements on the stencil
      psb_c_l_idx2ijk(ijk,glob_row,sizes,3,0);
      ix = ijk[0]; iy = ijk[1]; iz = ijk[2];
+     x = ix*deltah; y = iy*deltah; z = iz*deltah; t = (input->timestep)*dt;
      // We compute the result of Φ(p) by first going back to the (i,j,k)
      // indexing and substiting the value of p[i,j,k] on the boundary with the
      // correct values, otherwise we use the entries stored in u, together with
@@ -493,8 +503,8 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
      // with the values of the nonlinear evaluations and doing some
      // matrix-vector products. This way should be faster, and less taxing on
      // the memory.
-     entries[0] = psb_c_dgetelem(NV_PVEC_P((*uold)),glob_row,
-                                 NV_DESCRIPTOR_P((*uold))); // u^(l-1)_{i,j,k}
+     entries[0] = psb_c_dgetelem(NV_PVEC_P(uold),glob_row,
+                                 NV_DESCRIPTOR_P(uold)); // u^(l-1)_{i,j,k}
      entries[1] = psb_c_dgetelem(NV_PVEC_P(u),glob_row,
                                   NV_DESCRIPTOR_P(u)); // u^(l)_{i,j,k}
      if (ix == 0) {        // Cannot do i-1
@@ -561,7 +571,8 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
         + 1.0/Kfun(entries[6],a,gamma,Ks)) + 2*(entries[7]-entries[1])/
         (1.0/Kfun(entries[7],a,gamma,Ks)
           + 1.0/Kfun(entries[1],a,gamma,Ks)) )
-      - 1.0/deltah2*(Kfun(entries[7],a,gamma,Ks) - Kfun(entries[6],a,gamma,Ks));
+      - 1.0/deltah2*(Kfun(entries[7],a,gamma,Ks) - Kfun(entries[6],a,gamma,Ks))
+      - source(x,y,z,t);
      irow[0] = glob_row;
      psb_c_dgeins(1,irow,val,NV_PVEC_P(fval),NV_DESCRIPTOR_P(fval));
    }
@@ -578,7 +589,6 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   /* This function returns the evaluation of the Jacobian of the system upon
   request of the Newton method.                                               */
   struct user_data_for_f *input = user_data;
-  N_Vector *uold;
   psb_i_t iam, np, ictxt, idim, nl;
   psb_i_t i, k, info, el;
   psb_l_t glob_row, irow[10*NBMAX], icol[10*NBMAX];
@@ -599,7 +609,6 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   gamma  = input->gamma;
   a      = input->a;
   Ks     = input->Ks;
-  uold   = input->oldpressure;
   dt     = input->dt;
   rho    = input->rho;
   phi    = input->phi;
@@ -836,6 +845,11 @@ static double Kfunprime(double p, double a, double gamma, double Ks){
 static double sgn(double x){
   // Can this be done in a better way?
   return((x > 0) ? 1 : ((x < 0) ? -1 : 0));
+}
+
+static double source(double x, double y, double z, double t){
+  // Source term function
+  return(0.0);
 }
 
 /*--------------------------------------------------------
