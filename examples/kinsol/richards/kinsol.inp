@@ -13,16 +13,16 @@
 1.0                   ρ  : Water density
 1.0                   ϕ  : Porosity of the medium
 -20.0                 pr : Value of preassure head at the boundary
-10                    Tmax : Maximum time of simulation
+1                     Tmax : Maximum time of simulation
 100                   Nt : Number of time steps
 100                   Max. number of nonlinear iterations
-1e-10                 Tolerance for the Newton Method
+1e-6                  Tolerance for the Newton Method
 0.0                   Stopping tolerance on the min. scaled steplength 0.0 def
-BICGSTAB              Iterative method BICGSTAB CGS  BICG BICGSTABL RGMRES
+RGMRES                Iterative method BICGSTAB CGS  BICG BICGSTABL RGMRES
 ML                    Preconditioner NONE  DIAG  BJAC ML
 CSR                   A Storage format CSR COO JAD
 1                     Stopping criterion
 80                    MAXIT
 01                    ITRACE
-20                    IRST    restart for RGMRES  and BiCGSTABL
-1e-14                 Tolerance for the Krylov Method
+80                    IRST    restart for RGMRES  and BiCGSTABL
+1e-9                  Tolerance for the Krylov Method

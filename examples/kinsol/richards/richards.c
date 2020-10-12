@@ -151,7 +151,7 @@
     psb_i_t info;
     bool verbose = SUNFALSE;
     /* Set global strategy flag */
-    int globalstrategy = KIN_NONE;
+    int globalstrategy = KIN_LINESEARCH;
     /* Performance variables */
     psb_d_t tic, toc, timecdh;
 
@@ -439,13 +439,12 @@
      fprintf(stdout, "\n**********************************************************************\n");
      fprintf(stdout, "************ Time Step %d of %d ****************************************\n", 1,Nt );
    }
-   N_VConst(1.0,sc);             // Unweighted norm
-   N_VConst(1.0,su);             // Unweighted norm
    info = KINSol(kmem,           /* KINSol memory block */
                  u,              /* initial guess on input; solution vector */
                  globalstrategy, /* global strategy choice */
                  su,             /* scaling vector for the variable u */
                  sc);            /* scaling vector for function values fval */
+
 
    if (check_flag(&info, "KINSol", 1, iam)){
      psb_c_abort(ictxt);
@@ -456,8 +455,9 @@
    if(iam == 0){
      PrintFinalStats(kmem,1);
    }
+   KINFree(&kmem);
 
-   for(i=2;i<=Nt+1;i++){  // Main Time Loop
+   for(i=2;i<=1+1;i++){  // Main Time Loop
      if (iam == 0){
        fprintf(stdout, "\n**********************************************************************\n");
        fprintf(stdout, "************ Time Step %d of %d **************************************\n", i,Nt );
@@ -469,6 +469,32 @@
 
      /* We perform the new incomplete Newton time step using as starting point
      the solution at the previous time step.                                  */
+     N_VConst(1.0,sc);               // Unweighted norm
+     N_VConst(1.0,su);               // Unweighted norm
+     kmem = KINCreate();
+     info = KINInit(kmem, funcprpr, u);
+     if (check_flag(&info, "KINInit", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetNumMaxIters(kmem, newtonmaxit);
+     if (check_flag(&info, "KINSetNumMaxIters", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetPrintLevel(kmem, 0);
+     if (check_flag(&info, "KINSetPrintLevel", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetUserData(kmem, &user_data);
+     if (check_flag(&info, "KINSetUserData", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetConstraints(kmem, constraints);
+     if (check_flag(&info, "KINSetConstraints", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetFuncNormTol(kmem, fnormtol);
+     if (check_flag(&info, "KINSetFuncNormTol", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetScaledStepTol(kmem, scsteptol);
+     if (check_flag(&info, "KINSetScaledStepTol", 1, iam)) psb_c_abort(ictxt);
+     /* Attach the linear solver to KINSOL and set its options */
+     info = KINSetLinearSolver(kmem, LS, J);
+     if (check_flag(&info, "KINSetLinearSolver", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetJacFn(kmem,jac);
+     if (check_flag(&info, "KINSetJacFn", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetEtaForm(kmem,KIN_ETACONSTANT);
+     if (check_flag(&info, "KINSetEtaForm", 1, iam)) psb_c_abort(ictxt);
+     info = KINSetEtaConstValue(kmem,options.eps);
+     if (check_flag(&info, "KINSetEtaConstValue", 1, iam)) psb_c_abort(ictxt);
      info = KINSol(kmem,           /* KINSol memory block */
                    u,              /* initial guess on input; solution vector */
                    globalstrategy, /* global strategy choice */
@@ -484,11 +510,11 @@
      if(iam == 0){
        PrintFinalStats(kmem,1);
      }
-
+     KINFree(&kmem);
    }
 
    /* Free the Memory */
-   KINFree(&kmem);
+
    N_VDestroy(u);
    N_VDestroy(constraints);
    N_VDestroy(sc);
@@ -496,7 +522,6 @@
    SUNMatDestroy(J);
    SUNLinSolFree(LS);
    free(cdh);
-
    psb_c_barrier(ictxt);
    psb_c_exit(ictxt);
 
@@ -925,7 +950,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   toc = psb_c_wtime();
   if (iam == 0) fprintf(stdout, "Buit new Jacobian in %lf s\n",toc-tic);
 
-  // SUNPSBLASMatrix_Print(J,"Jacobian","Jacobian.mtx");
+  SUNPSBLASMatrix_Print(J,"Jacobian","Jacobian.mtx");
 
   return(info);
 }
