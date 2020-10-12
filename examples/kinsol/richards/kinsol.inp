@@ -1,16 +1,20 @@
-23                    Number of entries below this
-20                    Domain size (actual system is this**3)
+27                    Number of entries below this
+10                    Domain size (actual system is this**3)
+1.0                   Size x of the box
+1.0                   Size y of the box
+1.0                   Size z of the box
 0.287                 θs : Saturated moisture contents
 0.075                 θr : Residual moisture contents
 1.611e6               α  : van Genuchten empirical parameter
 3.96                  β  : van Genuchten empirical parameter
 1.175e6               a  : van Genuchten empirical parameter
 4.74                  γ  : van Genuchten empirical parameter
-9.44e-5               Ks : Saturated hydraulic conductivity
+9.44e-3               Ks : Saturated hydraulic conductivity
 1.0                   ρ  : Water density
 1.0                   ϕ  : Porosity of the medium
-100                   Tmax : Maximum time of simulation
-200                   Nt : Number of time steps
+-20.0                 pr : Value of preassure head at the boundary
+10                    Tmax : Maximum time of simulation
+100                   Nt : Number of time steps
 100                   Max. number of nonlinear iterations
 1e-10                 Tolerance for the Newton Method
 0.0                   Stopping tolerance on the min. scaled steplength 0.0 def

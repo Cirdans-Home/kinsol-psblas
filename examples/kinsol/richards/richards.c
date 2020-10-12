@@ -59,6 +59,7 @@
  static int jac(N_Vector y, N_Vector f, SUNMatrix J,
                 void *user_data, N_Vector tmp1, N_Vector tmp2);
  static int check_flag(void *flagvalue, const char *funcname, int opt, int id);
+ static void PrintFinalStats(void *kmem, int i);
 
  /*--------------------------------------------------
   * Coefficient functions for J and F
@@ -71,6 +72,9 @@
   static double Kfunprime(double p, double a, double gamma, double Ks);
   static double sgn(double x);
   static double source(double x, double y, double z, double t);
+  static double boundary(double x, double y, double z, double t, void *user_data);
+  static double upstream(double pU, double pL, void *user_data);
+  static double chi(double pU, double pL);
 
  /*-------------------------------------------------
   * Routine to read input from file
@@ -107,7 +111,8 @@
     psb_l_t *vl;          // Local portion of the global indexs
     psb_i_t idim;         // Number of dofs in one direction
     psb_i_t nl;           // Number of blocks in the distribution
-    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, rho, phi; // Problem Parameters
+    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, rho, phi, pr; // Problem Parameters
+    psb_d_t xmax,ymax,L;  // Size of the box
     psb_d_t dt;
     N_Vector oldpressure; // Old Pressure value for Euler Time-Stepping
     psb_i_t timestep;     // Actual time-step
@@ -131,7 +136,8 @@
     SUNMatrix    J;
     /* Input from file */
     psb_i_t nparms, idim, Nt, newtonmaxit, istop, itmax, itrace, irst;
-    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, Tmax, tol, rho, phi;
+    psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, Tmax, tol, rho, phi, pr;
+    psb_d_t xmax, ymax, L;
     double  fnormtol, scsteptol;
     char methd[20],ptype[20],afmt[8]; /* Solve method, p. type, matrix format */
     /* Parallel Environment */
@@ -165,6 +171,9 @@
     if (iam == 0) {
       get_iparm(stdin,&nparms);
       get_iparm(stdin,&idim);
+      get_dparm(stdin,&xmax);
+      get_dparm(stdin,&ymax);
+      get_dparm(stdin,&L);
       get_dparm(stdin,&thetas);
       get_dparm(stdin,&thetar);
       get_dparm(stdin,&alpha);
@@ -174,6 +183,7 @@
       get_dparm(stdin,&Ks);
       get_dparm(stdin,&rho);
       get_dparm(stdin,&phi);
+      get_dparm(stdin,&pr);
       get_dparm(stdin,&Tmax);
       get_iparm(stdin,&Nt);
       get_iparm(stdin,&newtonmaxit);
@@ -196,10 +206,15 @@
       fprintf(stdout, "                                   : (α        ,β    ,a        ,γ    )\n");
       fprintf(stdout, "van Genuchten empirical parameters : (%1.3e,%1.3f,%1.3e,%1.3f)\n",
         alpha,beta,a,gamma);
+      fprintf(stdout, "Initial value of the pressure head is %lf cm\n",pr);
+      fprintf(stdout, "Solving in a box [0,%lf]x[0,%lf]x[0,%lf]\n",xmax,ymax,L);
       fflush(stdout);
    }
    psb_c_ibcast(ictxt,1,&nparms,0);
    psb_c_ibcast(ictxt,1,&idim,0);
+   psb_c_dbcast(ictxt,1,&xmax,0);
+   psb_c_dbcast(ictxt,1,&ymax,0);
+   psb_c_dbcast(ictxt,1,&L,0);
    psb_c_dbcast(ictxt,1,&thetas,0);
    psb_c_dbcast(ictxt,1,&thetar,0);
    psb_c_dbcast(ictxt,1,&alpha,0);
@@ -209,6 +224,7 @@
    psb_c_dbcast(ictxt,1,&Ks,0);
    psb_c_dbcast(ictxt,1,&rho,0);
    psb_c_dbcast(ictxt,1,&phi,0);
+   psb_c_dbcast(ictxt,1,&pr,0);
    psb_c_dbcast(ictxt,1,&Tmax,0);
    psb_c_ibcast(ictxt,1,&Nt,0);
    psb_c_ibcast(ictxt,1,&newtonmaxit,0);
@@ -223,6 +239,13 @@
    psb_c_ibcast(ictxt,1,&irst,0);
    psb_c_dbcast(ictxt,1,&tol,0);
 
+   if( (xmax != ymax) || (xmax != L) || (ymax != L)){
+     fprintf(stderr, "\nAbort, works only on cube for now!\n");
+     fflush(stderr);
+     psb_c_abort(ictxt);
+   }
+
+
     /* Perform a 3D BLOCK data distribution */
     if(iam==0){
       fprintf(stdout, "\nStarting 3D BLOCK data distribution\n");
@@ -235,7 +258,7 @@
     nb = (ng+np-1)/np;
     nl = nb;
     if ( (ng -iam*nb) < nl) nl = ng -iam*nb;
-      fprintf(stderr,"%d: Input data %d %ld %d %ld\n",iam,idim,ng,nb, nl);
+      fprintf(stdout,"%d: Input data %d %ld %d %ld\n",iam,idim,ng,nb, nl);
     if ((vl=malloc((nb+1)*sizeof(psb_l_t)))==NULL) {
       fprintf(stderr,"On %d: malloc failure\n",iam);
       psb_c_abort(ictxt);
@@ -252,6 +275,9 @@
    used to compute the Jacobian and the function evaluations */
    user_data.vl     = vl;
    user_data.idim   = idim;
+   user_data.xmax   = xmax;
+   user_data.ymax   = ymax;
+   user_data.L      = L;
    user_data.nl     = nl;
    user_data.thetas = thetas;
    user_data.thetar = thetar;
@@ -262,6 +288,7 @@
    user_data.Ks     = Ks;
    user_data.rho    = rho;
    user_data.phi    = phi;
+   user_data.pr     = pr;
 
    /*We need to reuse the same communicator many times, namely every time we
    need to populate a new Jacobian. Therefore we use the psb_c_cdins routine
@@ -342,6 +369,8 @@
     if(check_flag((void *)LS, "SUNLinSol_PSBLAS", 0, iam)) psb_c_abort(ictxt);
 
     SUNLinSolInitialize_PSBLAS(LS);
+
+    if(iam == 0) fprintf(stdout, "Setting ML options.\n");
     info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
     if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
     info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
@@ -350,6 +379,7 @@
     if (check_flag(&info, "COARSE_SOLVE", 1, iam)) psb_c_abort(ictxt);
     info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
     if (check_flag(&info, "COARSE_SUBSOLVE", 1, iam)) psb_c_abort(ictxt);
+
 
 
    /*-------------------------------------------------------
@@ -376,7 +406,8 @@
     -------------------------------------------------------*/
    dt = Tmax/(Nt+1);
    user_data.dt = dt;
-   N_VConst(1.0,user_data.oldpressure);  // Initial Condition
+   N_VConst(pr,u);  // Initial Condition
+   N_VLinearSum(1.0,u,0.0,user_data.oldpressure,user_data.oldpressure);
    /* Initialization of the nonlinear solver */
    kmem = KINCreate();
    info = KINInit(kmem, funcprpr, u);
@@ -403,25 +434,56 @@
    info = KINSetEtaConstValue(kmem,options.eps);
    if (check_flag(&info, "KINSetEtaConstValue", 1, iam)) psb_c_abort(ictxt);
 
-   // info = KINSol(kmem,           /* KINSol memory block */
-   //               u,              /* initial guess on input; solution vector */
-   //               globalstrategy, /* global strategy choice */
-   //               su,             /* scaling vector for the variable u */
-   //               sc);            /* scaling vector for function values fval */
+   psb_c_barrier(ictxt);
+   if (iam == 0){
+     fprintf(stdout, "\n**********************************************************************\n");
+     fprintf(stdout, "************ Time Step %d of %d ****************************************\n", 1,Nt );
+   }
+   N_VConst(1.0,sc);             // Unweighted norm
+   N_VConst(1.0,su);             // Unweighted norm
+   info = KINSol(kmem,           /* KINSol memory block */
+                 u,              /* initial guess on input; solution vector */
+                 globalstrategy, /* global strategy choice */
+                 su,             /* scaling vector for the variable u */
+                 sc);            /* scaling vector for function values fval */
 
-   for(i=1;i==Nt+1;i++){  // Main Time Loop
+   if (check_flag(&info, "KINSol", 1, iam)){
+     psb_c_abort(ictxt);
+   } else {
+     info = 0;
+   }
+
+   if(iam == 0){
+     PrintFinalStats(kmem,1);
+   }
+
+   for(i=2;i<=Nt+1;i++){  // Main Time Loop
+     if (iam == 0){
+       fprintf(stdout, "\n**********************************************************************\n");
+       fprintf(stdout, "************ Time Step %d of %d **************************************\n", i,Nt );
+     }
      user_data.timestep = i; // used to compute time depending quantities
 
      /* For Euler Time-Stepping we take note of the old pressure value */
-     // N_VLinearSum(1.0,u,0.0,user_data.oldpressure,user_data.oldpressure);
+     N_VLinearSum(1.0,u,0.0,user_data.oldpressure,user_data.oldpressure);
 
      /* We perform the new incomplete Newton time step using as starting point
      the solution at the previous time step.                                  */
-     // info = KINSol(kmem,           /* KINSol memory block */
-     //               u,              /* initial guess on input; solution vector */
-     //               globalstrategy, /* global strategy choice */
-     //               su,             /* scaling vector for the variable u */
-     //               sc);            /* scaling vector for function values fval */
+     info = KINSol(kmem,           /* KINSol memory block */
+                   u,              /* initial guess on input; solution vector */
+                   globalstrategy, /* global strategy choice */
+                   su,             /* scaling vector for the variable u */
+                   sc);            /* scaling vector for function values fval */
+
+     if (check_flag(&info, "KINSol", 1, iam)){
+       psb_c_abort(ictxt);
+     } else {
+       info = 0;
+     }
+
+     if(iam == 0){
+       PrintFinalStats(kmem,1);
+     }
 
    }
 
@@ -448,7 +510,7 @@
 */
 static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
 {
-/* This function returns the evaluation fval = \Phi(u;parameters) to march the
+/* This function returns the evaluation fval = Φ(u;parameters) to march the
    Newton method.                                                             */
    struct user_data_for_f *input = user_data;
    N_Vector uold;
@@ -460,7 +522,8 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    psb_i_t ix, iy, iz, ijk[3],sizes[3];
 
    /* Problem parameters */
-   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt, rho, phi;
+   psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt, rho, phi, pr;
+   psb_d_t xmax, ymax, L;
 
    /* Load problem parameters */
    thetas = input->thetas;
@@ -474,6 +537,10 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    phi    = input->phi;
    uold   = input->oldpressure;
    dt     = input->dt;
+   pr     = input->pr;
+   xmax   = input->xmax;
+   ymax   = input->ymax;
+   L      = input->L;
 
    info = 0;
 
@@ -484,7 +551,25 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    psb_c_info(NV_ICTXT_P(u),&iam,&np);
    psb_c_set_index_base(0);
 
-   deltah = (double) 1.0/(idim+1);
+   if (iam == 0){
+     fprintf(stdout, "----------------------------------------------------------------------\n");
+     fprintf(stdout, "Function Evaluation on the parameters:\n");
+     fprintf(stdout, "----------------------------------------------------------------------\n");
+     fprintf(stdout, "Saturated moisture contents        : %1.3f\n",thetar);
+     fprintf(stdout, "Residual moisture contents         : %1.3f\n",thetas);
+     fprintf(stdout, "Saturated hydraulic conductivity   : %1.3e\n",Ks);
+     fprintf(stdout, "Water density (ρ)                  : %1.3e\n",rho);
+     fprintf(stdout, "Porosity of the medium (ϕ)         : %1.3e\n",phi);
+     fprintf(stdout, "                                   : (α        ,β    ,a        ,γ    )\n");
+     fprintf(stdout, "van Genuchten empirical parameters : (%1.3e,%1.3f,%1.3e,%1.3f)\n",
+     alpha,beta,a,gamma);
+     fprintf(stdout, "Initial value of the pressure head is %lf cm\n",pr);
+     fprintf(stdout, "Solving in a box [0,%lf]x[0,%lf]x[0,%lf]\n",xmax,ymax,L);
+     fprintf(stdout, "----------------------------------------------------------------------\n");
+     fflush(stdout);
+   }
+
+   deltah = (double) L/(idim+1);
    sqdeltah = deltah*deltah;
    deltah2  = 2.0* deltah;
    sizes[0] = idim; sizes[1] = idim; sizes[2] = idim;
@@ -508,7 +593,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
      entries[1] = psb_c_dgetelem(NV_PVEC_P(u),glob_row,
                                   NV_DESCRIPTOR_P(u)); // u^(l)_{i,j,k}
      if (ix == 0) {        // Cannot do i-1
-       entries[2] = 0.0; // u^(l)_{i-1,j,k}
+       entries[2] = boundary(x,y,z,t,user_data); // u^(l)_{i-1,j,k}
      }else{
        ijk[0] = ix - 1; ijk[1] = iy; ijk[2] = iz;
        entries[2] = psb_c_dgetelem(NV_PVEC_P(u),
@@ -516,7 +601,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
                                    NV_DESCRIPTOR_P(u)); // u^(l)_{i-1,j,k}
      }
      if (ix == idim -1){
-       entries[3] = 0.0;
+       entries[3] = boundary(x,y,z,t,user_data);
      }else{
        ijk[0] = ix+1; ijk[1] = iy; ijk[2] = iz;
        entries[3] = psb_c_dgetelem(NV_PVEC_P(u),
@@ -524,7 +609,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
                                    NV_DESCRIPTOR_P(u));  // u^(l)_{i+1,j,k}
      }
      if (iy == 0){       // Cannot do j-1
-       entries[4] = 0.0; // u^(l)_{i+1,j,k}
+       entries[4] = boundary(x,y,z,t,user_data); // u^(l)_{i+1,j,k}
      }else{
        ijk[0] = ix; ijk[1] = iy-1; ijk[2] = iz;
        entries[4] = psb_c_dgetelem(NV_PVEC_P(u),
@@ -532,7 +617,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
                                    NV_DESCRIPTOR_P(u));  // u^(l)_{i,j-1,k}
      }
      if (iy == idim -1){
-       entries[5] = 0.0;
+       entries[5] = boundary(x,y,z,t,user_data);
      }else{
        ijk[0] = ix; ijk[1] = iy+1; ijk[2] = iz;
        entries[5] = psb_c_dgetelem(NV_PVEC_P(u),
@@ -540,7 +625,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
                                    NV_DESCRIPTOR_P(u));  // u^(l)_{i,j+1,k}
      }
      if (iz == 0){       // Cannot do k-1
-       entries[6] = 0.0;
+       entries[6] = boundary(x,y,z,t,user_data);
      }else{
        ijk[0] = ix; ijk[1] = iy; ijk[2] = iz-1;
        entries[6] = psb_c_dgetelem(NV_PVEC_P(u),
@@ -548,7 +633,7 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
                                    NV_DESCRIPTOR_P(u));  // u^(l)_{i,j,k-1}
      }
      if (iz == idim -1){ // Cannot do k+1
-       entries[7] = 0.0;
+       entries[7] = boundary(x,y,L,t,user_data);
      }else{
        ijk[0] = ix; ijk[1] = iy; ijk[2] = iz+1;
        entries[7] = psb_c_dgetelem(NV_PVEC_P(u),
@@ -559,20 +644,28 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
      // entry of the funciton
      val[0] = (rho*phi)/dt*(Sfun(entries[0],alpha,beta,thetas,thetar)
       - Sfun(entries[1],alpha,beta,thetas,thetar))
-      - 1.0/deltah2*( 2*(entries[1]-entries[2])/(1.0/Kfun(entries[1],a,gamma,Ks)
-        + 1.0/Kfun(entries[2],a,gamma,Ks)) + 2*(entries[3]-entries[1])/
-        (1.0/Kfun(entries[3],a,gamma,Ks)
-          + 1.0/Kfun(entries[1],a,gamma,Ks)) )
-      - 1.0/deltah2*( 2*(entries[1]-entries[4])/(1.0/Kfun(entries[1],a,gamma,Ks)
-        + 1.0/Kfun(entries[4],a,gamma,Ks)) + 2*(entries[5]-entries[1])/
-        (1.0/Kfun(entries[5],a,gamma,Ks)
-            + 1.0/Kfun(entries[1],a,gamma,Ks)) )
-      - 1.0/deltah2*( 2*(entries[1]-entries[6])/(1.0/Kfun(entries[1],a,gamma,Ks)
-        + 1.0/Kfun(entries[6],a,gamma,Ks)) + 2*(entries[7]-entries[1])/
-        (1.0/Kfun(entries[7],a,gamma,Ks)
-          + 1.0/Kfun(entries[1],a,gamma,Ks)) )
-      - 1.0/deltah2*(Kfun(entries[7],a,gamma,Ks) - Kfun(entries[6],a,gamma,Ks))
-      - source(x,y,z,t);
+      - 1/sqdeltah*(  // x-direction
+        ( entries[3]-entries[1] )*upstream(entries[3],entries[1],user_data)
+         - (entries[1]-entries[2])*upstream(entries[1],entries[2],user_data)
+      )
+      - 1/sqdeltah*(  // y-direction
+        ( entries[5]-entries[1] )*upstream(entries[5],entries[1],user_data)
+         - (entries[1]-entries[4])*upstream(entries[1],entries[4],user_data)
+      )
+      - 1/sqdeltah*(  // z-direction
+        ( entries[7]-entries[1] )*upstream(entries[7],entries[1],user_data)
+         - (entries[1]-entries[6])*upstream(entries[1],entries[6],user_data)
+      )
+      - 1/deltah2*( // z-transport
+        Kfun(entries[7],a,gamma,Ks)
+        -Kfun(entries[6],a,gamma,Ks)
+      )- source(x,y,z,t);
+
+      // fprintf(stdout, "\n\nGlobal Row %ld Central index (%d,%d,%d)\n",glob_row,ix,iy,iz);
+      // fprintf(stdout, "[ 00.00 , %1.2lf , 00.00 ]\n[%1.2lf , %1.2lf , %1.2lf ]\n[ 00.00 , %1.2lf , 00.00 ]\n",entries[5],entries[2],entries[1],entries[3],entries[4]);
+      // fprintf(stdout, "[%1.2lf]\n[%1.2lf]\n[%1.2lf]\n",entries[7],entries[1],entries[6]);
+      // fprintf(stdout, "F(%ld|%d,%d,%d) = %lf\n",glob_row,ix,iy,iz,val[0]);
+
      irow[0] = glob_row;
      psb_c_dgeins(1,irow,val,NV_PVEC_P(fval),NV_DESCRIPTOR_P(fval));
    }
@@ -580,6 +673,10 @@ static int funcprpr(N_Vector u, N_Vector fval, void *user_data)
    // We assemble the vector at the end
    N_VAsb_PSBLAS(fval);
 
+   FILE *outfile;
+   outfile = fopen("vector.dat","w+");
+   N_VPrintFile_PSBLAS(fval,outfile);
+   fclose(outfile);
   return(info);
 }
 
@@ -592,12 +689,13 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   psb_i_t iam, np, ictxt, idim, nl;
   psb_i_t i, k, info, el;
   psb_l_t glob_row, irow[10*NBMAX], icol[10*NBMAX];
-  double x, y, z, deltah, sqdeltah, deltah2;
+  double x, y, z, t, deltah, sqdeltah, deltah2;
   double val[10*NBMAX],entries[8];
   psb_i_t ix, iy, iz, ijk[3],ijkinsert[3],sizes[3];
 
   /* Problem parameters */
-  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt, rho, phi;
+  psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, dt, rho, phi, pr;
+  psb_d_t xmax, ymax, L;
   /* Timings */
   psb_d_t tic, toc, timecdh;
 
@@ -612,6 +710,10 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   dt     = input->dt;
   rho    = input->rho;
   phi    = input->phi;
+  pr     = input->pr;
+  xmax   = input->xmax;
+  ymax   = input->ymax;
+  L      = input->L;
 
   info = 0;
 
@@ -622,10 +724,29 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   psb_c_info(NV_ICTXT_P(yvec),&iam,&np);
   psb_c_set_index_base(0);
 
-  deltah = (double) 1.0/(idim+1);
+  if (iam == 0){
+    fprintf(stdout, "----------------------------------------------------------------------\n");
+    fprintf(stdout, "Jacobian Evaluation on the parameters:\n");
+    fprintf(stdout, "----------------------------------------------------------------------\n");
+    fprintf(stdout, "Saturated moisture contents        : %1.3f\n",thetar);
+    fprintf(stdout, "Residual moisture contents         : %1.3f\n",thetas);
+    fprintf(stdout, "Saturated hydraulic conductivity   : %1.3e\n",Ks);
+    fprintf(stdout, "Water density (ρ)                  : %1.3e\n",rho);
+    fprintf(stdout, "Porosity of the medium (ϕ)         : %1.3e\n",phi);
+    fprintf(stdout, "                                   : (α        ,β    ,a        ,γ    )\n");
+    fprintf(stdout, "van Genuchten empirical parameters : (%1.3e,%1.3f,%1.3e,%1.3f)\n",
+    alpha,beta,a,gamma);
+    fprintf(stdout, "Initial value of the pressure head is %lf cm\n",pr);
+    fprintf(stdout, "Solving in a box [0,%lf]x[0,%lf]x[0,%lf]\n",xmax,ymax,L);
+    fprintf(stdout, "----------------------------------------------------------------------\n");
+    fflush(stdout);
+  }
+
+  deltah = (double) L/(idim+1);
   sqdeltah = deltah*deltah;
   deltah2  = 2.0* deltah;
   sizes[0] = idim; sizes[1] = idim; sizes[2] = idim;
+  x = ix*deltah; y = iy*deltah; z = iz*deltah; t = (input->timestep)*dt;
 
   for (i=0; i<nl;  i++) {
     glob_row=input->vl[i];                 // Get the index of the global row
@@ -643,7 +764,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
     entries[1] = psb_c_dgetelem(NV_PVEC_P(yvec),glob_row,
                                  NV_DESCRIPTOR_P(yvec)); // u^(l)_{i,j,k}
     if (ix == 0) {        // Cannot do i-1
-      entries[2] = 0.0; // u^(l)_{i-1,j,k}
+      entries[2] = boundary(x,y,z,t,&user_data); // u^(l)_{i-1,j,k}
     }else{
       ijk[0] = ix - 1; ijk[1] = iy; ijk[2] = iz;
       entries[2] = psb_c_dgetelem(NV_PVEC_P(yvec),
@@ -651,7 +772,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
                                   NV_DESCRIPTOR_P(yvec)); // u^(l)_{i-1,j,k}
     }
     if (ix == idim -1){
-      entries[3] = 0.0;
+      entries[3] = boundary(x,y,z,t,&user_data);
     }else{
       ijk[0] = ix+1; ijk[1] = iy; ijk[2] = iz;
       entries[3] = psb_c_dgetelem(NV_PVEC_P(yvec),
@@ -659,7 +780,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
                                   NV_DESCRIPTOR_P(yvec));  // u^(l)_{i+1,j,k}
     }
     if (iy == 0){       // Cannot do j-1
-      entries[4] = 0.0; // u^(l)_{i+1,j,k}
+      entries[4] = boundary(x,y,z,t,&user_data); // u^(l)_{i+1,j,k}
     }else{
       ijk[0] = ix; ijk[1] = iy-1; ijk[2] = iz;
       entries[4] = psb_c_dgetelem(NV_PVEC_P(yvec),
@@ -667,7 +788,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
                                   NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j-1,k}
     }
     if (iy == idim -1){
-      entries[5] = 0.0;
+      entries[5] = boundary(x,y,z,t,&user_data);
     }else{
       ijk[0] = ix; ijk[1] = iy+1; ijk[2] = iz;
       entries[5] = psb_c_dgetelem(NV_PVEC_P(yvec),
@@ -675,7 +796,7 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
                                   NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j+1,k}
     }
     if (iz == 0){       // Cannot do k-1
-      entries[6] = 0.0;
+      entries[6] = boundary(x,y,z,t,&user_data);
     }else{
       ijk[0] = ix; ijk[1] = iy; ijk[2] = iz-1;
       entries[6] = psb_c_dgetelem(NV_PVEC_P(yvec),
@@ -683,110 +804,114 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
                                   NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j,k-1}
     }
     if (iz == idim -1){ // Cannot do k+1
-      entries[7] = 0.0;
+      entries[7] = boundary(x,y,L,t,&user_data);
     }else{
       ijk[0] = ix; ijk[1] = iy; ijk[2] = iz+1;
       entries[7] = psb_c_dgetelem(NV_PVEC_P(yvec),
                                   psb_c_l_ijk2idx(ijk,sizes,3,0),
                                   NV_DESCRIPTOR_P(yvec));  // u^(l)_{i,j,k+1}
     }
+
     /* Now that we have all the entries of yvec needed to compute the entries
     of the current row of the Jacobian we can loop through the different nonzero
     elements and compute the relative values.                                 */
     /*  term depending on   (i-1,j,k)        */
-    val[el] = 2.0*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
-      (Kfun(entries[2],a,gamma,Ks)+(entries[2]-entries[1])
-      *Kfunprime(entries[2],a,gamma,Ks) ) + pow(Kfun(entries[2],a,gamma,Ks),2))
-      /( sqdeltah*pow(Kfun(entries[2],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    val[el] = 1/sqdeltah*(
+      entries[1]*Kfunprime(entries[2],a,gamma,Ks)*chi(entries[1],entries[2])
+      -entries[2]*Kfunprime(entries[2],a,gamma,Ks)*chi(entries[1],entries[2])
+      -1*upstream(entries[1],entries[2],user_data)
+    );
     if(ix != 0){
       ijkinsert[0]=ix-1; ijkinsert[1]=iy; ijkinsert[2]=iz;
       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
       el=el+1;
     }
+    //fprintf(stdout, "val = %e\n",val[el]);
     /*  term depending on     (i,j-1,k)        */
-    val[el] = 2.0*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
-      (Kfun(entries[4],a,gamma,Ks)+(entries[4]-entries[1])
-      *Kfunprime(entries[4],a,gamma,Ks) ) + pow(Kfun(entries[4],a,gamma,Ks),2))
-      /( sqdeltah*pow(Kfun(entries[4],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    val[el] = 1/sqdeltah*(
+      entries[1]*Kfunprime(entries[4],a,gamma,Ks)*chi(entries[1],entries[4])
+      -entries[2]*Kfunprime(entries[4],a,gamma,Ks)*chi(entries[1],entries[4])
+      -1*upstream(entries[1],entries[4],user_data)
+    );
     if (iy != 0){
       ijkinsert[0]=ix; ijkinsert[1]=iy-1; ijkinsert[2]=iz;
       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
       el=el+1;
     }
+    //fprintf(stdout, "val = %e\n",val[el]);
     /* term depending on      (i,j,k-1)        */
-    val[el] = Kfunprime(entries[6],a,gamma,Ks)/deltah2 - (
-      -2.0/(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[6],a,gamma,Ks))
-      +(2.0*(entries[1]-entries[6])*Kfunprime(entries[6],a,gamma,Ks))/
-       (pow(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[6],a,gamma,Ks),2)*
-        pow(Kfun(entries[6],a,gamma,Ks),2)))/sqdeltah;
+    val[el] = 1/sqdeltah*(
+      entries[1]*Kfunprime(entries[6],a,gamma,Ks)*chi(entries[1],entries[6])
+      -entries[2]*Kfunprime(entries[6],a,gamma,Ks)*chi(entries[1],entries[6])
+      -1*upstream(entries[1],entries[6],user_data)
+    ) + Kfunprime(entries[6],a,gamma,Ks)/deltah2;
     if (iz != 0){
       ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz-1;
       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
       el=el+1;
     }
+    //fprintf(stdout, "val = %e\n",val[el]);
     /* term depending on      (i,j,k)          */
-    val[el] = -2.0/sqdeltah*( Kfunprime(entries[1],a,gamma,Ks)*
-            ( (entries[1]-entries[2])*pow(Kfun(entries[2],a,gamma,Ks),2)
-                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[2],a,gamma,Ks),2)
-            + (entries[3]-entries[1])*pow(Kfun(entries[3],a,gamma,Ks),2)
-                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[3],a,gamma,Ks),2) )
-           + Kfun(entries[1],a,gamma,Ks)*( Kfun(entries[2],a,gamma,Ks)
-              /(Kfun(entries[2],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
-              - Kfun(entries[3],a,gamma,Ks)
-                 /(Kfun(entries[3],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))))
-             -2.0/sqdeltah*( Kfunprime(entries[1],a,gamma,Ks)*
-             ( (entries[1]-entries[4])*pow(Kfun(entries[4],a,gamma,Ks),2)
-                 /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[4],a,gamma,Ks),2)
-             + (entries[5]-entries[1])*pow(Kfun(entries[5],a,gamma,Ks),2)
-                 /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[5],a,gamma,Ks),2) )
-            + Kfun(entries[1],a,gamma,Ks)*( Kfun(entries[4],a,gamma,Ks)
-               /(Kfun(entries[4],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
-               - Kfun(entries[5],a,gamma,Ks)
-                  /(Kfun(entries[5],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))));
-            -2.0/sqdeltah*( Kfunprime(entries[1],a,gamma,Ks)*
-            ( (entries[1]-entries[6])*pow(Kfun(entries[6],a,gamma,Ks),2)
-                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[6],a,gamma,Ks),2)
-            + (entries[7]-entries[1])*pow(Kfun(entries[7],a,gamma,Ks),2)
-                /pow(Kfun(entries[1],a,gamma,Ks)+Kfun(entries[7],a,gamma,Ks),2) )
-           + Kfun(entries[1],a,gamma,Ks)*( Kfun(entries[6],a,gamma,Ks)
-              /(Kfun(entries[6],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))
-              - Kfun(entries[7],a,gamma,Ks)
-                 /(Kfun(entries[7],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks))))
-           +(rho*phi)/dt*Sfunprime(entries[1],alpha,beta,thetas,thetar);
+    val[el] = rho*phi*Sfunprime(entries[1],alpha,beta,thetas,thetar)/dt
+      -(entries[2]*Kfunprime(entries[1],a,gamma,Ks)*chi(entries[1],entries[2]))/sqdeltah
+      -(entries[4]*Kfunprime(entries[1],a,gamma,Ks)*chi(entries[1],entries[4]))/sqdeltah
+      -(entries[6]*Kfunprime(entries[1],a,gamma,Ks)*chi(entries[1],entries[6]))/sqdeltah
+      -(entries[3]*Kfunprime(entries[1],a,gamma,Ks)*(1.0-chi(entries[3],entries[1])))/sqdeltah
+      -(entries[5]*Kfunprime(entries[1],a,gamma,Ks)*(1.0-chi(entries[5],entries[1])))/sqdeltah
+      -(entries[7]*Kfunprime(entries[1],a,gamma,Ks)*(1.0-chi(entries[7],entries[1])))/sqdeltah
+      +(entries[1]*Kfunprime(entries[1],a,gamma,Ks)/sqdeltah)*(
+        (1.0-chi(entries[3],entries[1]))+chi(entries[1],entries[2])
+        +(1.0-chi(entries[5],entries[1]))+chi(entries[1],entries[4])
+        +(1.0-chi(entries[7],entries[1]))+chi(entries[1],entries[6])
+      )
+      +(1/sqdeltah)*(
+        upstream(entries[3],entries[1],user_data)
+        +upstream(entries[1],entries[2],user_data)
+        +upstream(entries[5],entries[1],user_data)
+        +upstream(entries[1],entries[6],user_data)
+        +upstream(entries[7],entries[1],user_data)
+        +upstream(entries[1],entries[6],user_data)
+      );
     ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz;
     icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
     el=el+1;
+    //fprintf(stdout, "val = %e\n",val[el]);
     /*  term depending on     (i+1,j,k)        */
-    val[el] = -2*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
-      (Kfun(entries[3],a,gamma,Ks)+(entries[3]-entries[1])
-      *Kfunprime(entries[3],a,gamma,Ks) ) + pow(Kfun(entries[3],a,gamma,Ks),2))
-      /( sqdeltah*pow(Kfun(entries[3],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    val[el] = 1/sqdeltah*(
+      entries[1]*Kfunprime(entries[3],a,gamma,Ks)*chi(entries[3],entries[1])
+      - entries[3]*Kfunprime(entries[3],a,gamma,Ks)*chi(entries[3],entries[1])
+      - upstream(entries[3],entries[1],user_data)
+    );
     if (iz != idim-1) {
       ijkinsert[0]=ix; ijkinsert[1]=iy; ijkinsert[2]=iz+1;
       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
       el=el+1;
     }
+    //fprintf(stdout, "val = %e\n",val[el]);
     /*  term depending on     (i,j+1,k)        */
-    val[el] = -2.0*Kfun(entries[1],a,gamma,Ks)*(Kfun(entries[1],a,gamma,Ks)*
-      (Kfun(entries[5],a,gamma,Ks)+(entries[5]-entries[1])
-      *Kfunprime(entries[5],a,gamma,Ks) ) + pow(Kfun(entries[5],a,gamma,Ks),2))
-      /( sqdeltah*pow(Kfun(entries[5],a,gamma,Ks) + Kfun(entries[1],a,gamma,Ks),2) );
+    val[el] = 1/sqdeltah*(
+      entries[1]*Kfunprime(entries[5],a,gamma,Ks)*chi(entries[5],entries[1])
+      - entries[5]*Kfunprime(entries[5],a,gamma,Ks)*chi(entries[5],entries[1])
+      - upstream(entries[5],entries[1],user_data)
+    );
     if (iy != idim-1){
       ijkinsert[0]=ix-1; ijkinsert[1]=iy+1; ijkinsert[2]=iz;
       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
       el=el+1;
     }
+    //fprintf(stdout, "val = %e\n",val[el]);
     /* term depending on      (i,j,k+1)        */
-    val[el] = -Kfunprime(entries[7],a,gamma,Ks)/deltah2 - (
-      2.0/(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[7],a,gamma,Ks))
-      +(2.0*(entries[7]-entries[1])*Kfunprime(entries[7],a,gamma,Ks))/
-       (pow(1.0/Kfun(entries[1],a,gamma,Ks)+1.0/Kfun(entries[7],a,gamma,Ks),2)*
-        pow(Kfun(entries[7],a,gamma,Ks),2)))/sqdeltah;
+    val[el] = 1/sqdeltah*(
+      entries[1]*Kfunprime(entries[7],a,gamma,Ks)*chi(entries[7],entries[1])
+      - entries[7]*Kfunprime(entries[7],a,gamma,Ks)*chi(entries[7],entries[1])
+      - upstream(entries[7],entries[1],user_data)
+    ) - Kfunprime(entries[7],a,gamma,Ks)/deltah2;
     if (ix != idim-1){
       ijkinsert[0]=ix+1; ijkinsert[1]=iy; ijkinsert[2]=iz;
       icol[el] = psb_c_l_ijk2idx(ijkinsert,sizes,3,0);
       el=el+1;
     }
+    //fprintf(stdout, "val = %e\n",val[el]);
     for (k=0; k<el; k++) irow[k]=glob_row;
     /* Insert the local portion into the Jacobian */
     if ((info=psb_c_dspins(el,irow,icol,val,SM_PMAT_P(J),SM_DESCRIPTOR_P(J)))!=0)
@@ -800,6 +925,8 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   toc = psb_c_wtime();
   if (iam == 0) fprintf(stdout, "Buit new Jacobian in %lf s\n",toc-tic);
 
+  // SUNPSBLASMatrix_Print(J,"Jacobian","Jacobian.mtx");
+
   return(info);
 }
 
@@ -808,7 +935,7 @@ static double Sfun(double p, double alpha, double beta, double thetas,
 
   double s = 0.0;
 
-  s = alpha*(thetas-thetar)/(alpha + pow(SUNRabs(p),beta));
+  s = alpha*(thetas-thetar)/(alpha + pow(SUNRabs(p),beta)) + thetar;
 
   return(s);
 }
@@ -852,6 +979,59 @@ static double source(double x, double y, double z, double t){
   return(0.0);
 }
 
+static double boundary(double x, double y, double z, double t, void *user_data){
+  /* Dirichlet boundary, (possibly) time dependent */
+  /* Water is applied at z=L such that the pressure head becomes zero
+     in the region, and p = pr on the all the remaining boundaries.*/
+  struct user_data_for_f *input = user_data;
+  psb_d_t pr, xmax, ymax, L;
+  psb_d_t res;
+
+  pr     = input->pr;
+  xmax   = input->xmax;
+  ymax   = input->ymax;
+  L      = input->L;
+
+  if (z == L){
+    if( x >= xmax/4.0 & x <= 3.0*xmax/4.0 & y >= ymax/4.0 & y <= 3.0*ymax/4.0){
+      res = 0.0;
+    }
+    else{
+      res = pr;
+    }
+  }
+  else{
+    res = pr;
+  }
+  return(res);
+}
+
+static double upstream(double pU, double pL, void *user_data){
+  /* Upstream mean for the Ks function */
+  struct user_data_for_f *input = user_data;
+  double alpha, gamma, Ks;
+  double res;
+
+  alpha  = input->alpha;
+  gamma  = input->gamma;
+  Ks     = input->Ks;
+
+  if(pU-pL >= 0){
+    res = Kfun(pU,alpha,gamma,Ks);
+  }else{
+    res = Kfun(pL,alpha,gamma,Ks);
+  }
+  return(res);
+}
+
+static double chi(double pU, double pL){
+  if(pU - pL >= 0){
+    return(1.0);
+  }else{
+    return(0.0);
+  }
+}
+
 /*--------------------------------------------------------
  * KINSOL FLAG AND OUTPUT ROUTINES
  *-------------------------------------------------------*/
@@ -888,4 +1068,33 @@ static int check_flag(void *flagvalue, const char *funcname, int opt, int id)
   }
 
   return(0);
+}
+
+static void PrintFinalStats(void *kmem, int i)
+{
+  long int nni, nfe, nli, npe, nps, ncfl, nfeSG;
+  psb_d_t funcnorm;
+  int flag;
+
+  flag = KINGetNumNonlinSolvIters(kmem, &nni);
+  check_flag(&flag, "KINGetNumNonlinSolvIters", 1, 0);
+  flag = KINGetNumFuncEvals(kmem, &nfe);
+  check_flag(&flag, "KINGetNumFuncEvals", 1, 0);
+  flag = KINGetNumLinIters(kmem, &nli);
+  check_flag(&flag, "KINGetNumLinIters", 1, 0);
+  flag = KINGetNumPrecEvals(kmem, &npe);
+  check_flag(&flag, "KINGetNumPrecEvals", 1, 0);
+  flag = KINGetNumPrecSolves(kmem, &nps);
+  check_flag(&flag, "KINGetNumPrecSolves", 1, 0);
+  flag = KINGetNumLinConvFails(kmem, &ncfl);
+  check_flag(&flag, "KINGetNumLinConvFails", 1, 0);
+  flag = KINGetNumLinFuncEvals(kmem, &nfeSG);
+  check_flag(&flag, "KINGetNumLinFuncEvals", 1, 0);
+  flag = KINGetFuncNorm(kmem, &funcnorm);
+  check_flag(&flag, "KINGetFuncNorm", 1, 0);
+
+  printf("\n\nFinal Statistics for Time Step %d\n",i);
+  printf("nni    = %5ld    nli   = %5ld\n", nni, nli);
+  printf("nfe    = %5ld    nfeSG = %5ld\n", nfe, nfeSG);
+  printf("nps    = %5ld    npe   = %5ld     ncfl  = %5ld\n", nps, npe, ncfl);
 }
