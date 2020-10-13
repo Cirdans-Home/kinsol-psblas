@@ -83,6 +83,7 @@ SUNLinearSolver SUNLinSol_PSBLAS(psb_c_SolverOptions options, char methd[], char
   content->options=options;
   content->cdh=NULL;
   content->ah=NULL;
+  content->bh=NULL;
   content->ictxt=ictxt;
   strcpy(content->methd,methd);
   strcpy(content->ptype,ptype);
@@ -168,22 +169,41 @@ int SUNLinSolSetup_PSBLAS(SUNLinearSolver S, SUNMatrix A){
   }
 
   psb_c_info(LS_ICTXT_P(S),&iam,&np);
-  if(iam==0) printf("\n\tI'm building the %s preconditioner\n",LS_PTYPE_P(S));
+  if(iam==0) printf("\n\tI'm building the %s preconditioner ",LS_PTYPE_P(S));
 
-  // The init routine depends on the fact that we are using PSBLAS or MLD2P4
-  if( strcmp(LS_PTYPE_P(S),"NONE") == 0 ||
-      strcmp(LS_PTYPE_P(S),"BJAC") == 0 ||
-      strcmp(LS_PTYPE_P(S),"DIAG") == 0 ){
-      ret = psb_c_dprecbld(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_PREC_P(S));
-      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
-  }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
-    strcmp(LS_PTYPE_P(S),"GS") == 0 ||
-    strcmp(LS_PTYPE_P(S),"AS") == 0 ||
-    strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
-      ret = mld_c_dhierarchy_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
-      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
-      ret = mld_c_dsmoothers_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
-      if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+  if ( LS_BMAT_P(S) == NULL){
+    if(iam==0) printf("on the same matrix of the system.\n");
+    // The init routine depends on the fact that we are using PSBLAS or MLD2P4
+    if( strcmp(LS_PTYPE_P(S),"NONE") == 0 ||
+        strcmp(LS_PTYPE_P(S),"BJAC") == 0 ||
+        strcmp(LS_PTYPE_P(S),"DIAG") == 0 ){
+        ret = psb_c_dprecbld(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_PREC_P(S));
+        if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+    }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
+      strcmp(LS_PTYPE_P(S),"GS") == 0 ||
+      strcmp(LS_PTYPE_P(S),"AS") == 0 ||
+      strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
+        ret = mld_c_dhierarchy_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
+        if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+        ret = mld_c_dsmoothers_build(LS_PMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
+        if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+    }
+  } else {
+    if(iam==0) printf("on the provided auxiliary matrix.\n");
+    if( strcmp(LS_PTYPE_P(S),"NONE") == 0 ||
+        strcmp(LS_PTYPE_P(S),"BJAC") == 0 ||
+        strcmp(LS_PTYPE_P(S),"DIAG") == 0 ){
+        ret = psb_c_dprecbld(LS_BMAT_P(S),LS_DESCRIPTOR_P(S),LS_PREC_P(S));
+        if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+    }else if(strcmp(LS_PTYPE_P(S),"ML") == 0 ||
+      strcmp(LS_PTYPE_P(S),"GS") == 0 ||
+      strcmp(LS_PTYPE_P(S),"AS") == 0 ||
+      strcmp(LS_PTYPE_P(S),"FBGS") == 0 ){
+        ret = mld_c_dhierarchy_build(LS_BMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
+        if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+        ret = mld_c_dsmoothers_build(LS_BMAT_P(S),LS_DESCRIPTOR_P(S),LS_MLPREC_P(S));
+        if(ret != 0) return(SUNLS_PSET_FAIL_UNREC);
+    }
   }
   /* Print out information on the preconditioner */
   if(strcmp(LS_PTYPE_P(S),"ML") == 0) mld_c_ddescr(LS_MLPREC_P(S));
@@ -281,6 +301,15 @@ long int SUNLinSolLastFlag_PSBLAS(SUNLinearSolver S){
   }else{
     return(SUNLS_RES_REDUCED);
   }
+}
+
+int SUNLinSolSetPreconditioner_PSBLAS(SUNLinearSolver S, SUNMatrix B){
+  if (S == NULL) return(-ONE);
+  if (B == NULL) return(-ONE);
+
+  LS_BMAT_P(S) = SM_PMAT_P(B);
+
+  return(SUNLS_SUCCESS);
 }
 
 /* ---------------------------------------

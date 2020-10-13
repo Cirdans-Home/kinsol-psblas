@@ -115,6 +115,8 @@
     psb_d_t xmax,ymax,L;  // Size of the box
     psb_d_t dt;
     N_Vector oldpressure; // Old Pressure value for Euler Time-Stepping
+    SUNLinearSolver *LS;  // Pointer to Linear Solver Object
+    SUNMatrix B;          // Matrix on which the preconditioner is built
     psb_i_t timestep;     // Actual time-step
   };
 
@@ -380,7 +382,7 @@
     info = SUNLinSolSetc_PSBLAS(LS,"COARSE_SUBSOLVE","ILU");
     if (check_flag(&info, "COARSE_SUBSOLVE", 1, iam)) psb_c_abort(ictxt);
 
-
+    user_data.LS = &LS;
 
    /*-------------------------------------------------------
     * Solution vector and auxiliary data
@@ -395,6 +397,8 @@
     su = N_VNew_PSBLAS(ictxt, cdh);
     J = NULL;
     J = SUNPSBLASMatrix(ictxt, cdh);
+    user_data.B = NULL;
+    user_data.B = SUNPSBLASMatrix(ictxt, cdh);
     user_data.oldpressure = N_VNew_PSBLAS(ictxt, cdh);
 
     N_VConst(0.0,constraints);      // No constraints
@@ -457,7 +461,7 @@
    }
    KINFree(&kmem);
 
-   for(i=2;i<=Nt;i++){  // Main Time Loop
+   for(i=2;i==Nt;i++){  // Main Time Loop
      if (iam == 0){
        fprintf(stdout, "\n**********************************************************************\n");
        fprintf(stdout, " Time Step %d of %d \n", i,Nt );
@@ -953,6 +957,10 @@ static int jac(N_Vector yvec, N_Vector fvec, SUNMatrix J,
   if (iam == 0) fprintf(stdout, "Buit new Jacobian in %lf s\n",toc-tic);
 
   SUNPSBLASMatrix_Print(J,"Jacobian","Jacobian.mtx");
+
+  // We say to the linear solver on what matrix he has to compute the
+  // preconditioner
+  SUNLinSolSetPreconditioner_PSBLAS(*(input->LS),J);
 
   return(info);
 }

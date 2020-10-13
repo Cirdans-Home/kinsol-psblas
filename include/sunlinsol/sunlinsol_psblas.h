@@ -55,7 +55,8 @@ struct _SUNLinearSolverContent_PSBLAS {
   psb_c_dprec *ph;             /* PSBLAS preconditioner                     */
   mld_c_dprec *mh;             /* MLD2P4 preconditioner                     */
   psb_c_descriptor *cdh;       /* descriptor for data distribution          */
-  psb_c_dspmat  *ah;           /* PSBLAS sparse matrix                      */
+  psb_c_dspmat  *ah;           /* PSBLAS sparse matrix (Coefficient)        */
+  psb_c_dspmat  *bh;           /* PSBLAS sparse matrix (Preconditioner)     */
   int ictxt;                   /* PSBLAS communicator                       */
   char methd[40];              /* String for Method and Preconditioner type */
   char ptype[20];
@@ -76,6 +77,8 @@ typedef struct _SUNLinearSolverContent_PSBLAS *SUNLinearSolverContent_PSBLAS;
 #define LS_DESCRIPTOR_P(S)  ( PSBLAS_CONTENT(S)->cdh )
 
 #define LS_PMAT_P(S)  ( PSBLAS_CONTENT(S)->ah )
+
+#define LS_BMAT_P(S)  ( PSBLAS_CONTENT(S)->bh )
 
 #define LS_ICTXT_P(S) ( PSBLAS_CONTENT(S)->ictxt )
 
@@ -101,6 +104,7 @@ SUNDIALS_EXPORT int SUNLinSolFree_PSBLAS(SUNLinearSolver S);
 SUNDIALS_EXPORT int SUNLinSolSeti_PSBLAS(SUNLinearSolver S, const char *what, psb_i_t val);
 SUNDIALS_EXPORT int SUNLinSolSetc_PSBLAS(SUNLinearSolver S, const char *what, const char *val);
 SUNDIALS_EXPORT int SUNLinSolSetr_PSBLAS(SUNLinearSolver S, const char *what, double val);
+SUNDIALS_EXPORT int SUNLinSolSetPreconditioner_PSBLAS(SUNLinearSolver S, SUNMatrix B);
 /* Get functions */
 SUNDIALS_EXPORT int SUNLinSolNumIters_PSBLAS(SUNLinearSolver S);
 SUNDIALS_EXPORT realtype SUNLinSolResNorm_PSBLAS(SUNLinearSolver S);
