@@ -151,7 +151,7 @@
     psb_i_t info;
     bool verbose = SUNFALSE;
     /* Set global strategy flag */
-    int globalstrategy = KIN_LINESEARCH;
+    int globalstrategy = KIN_NONE;
     /* Performance variables */
     psb_d_t tic, toc, timecdh;
 
@@ -415,7 +415,7 @@
    info = KINSetNumMaxIters(kmem, newtonmaxit);
    if (check_flag(&info, "KINSetNumMaxIters", 1, iam)) psb_c_abort(ictxt);
    info = KINSetPrintLevel(kmem, 0);
-   if (check_flag(&info, "KINSetPrintLevel", 1, iam)) psb_c_abort(ictxt);
+   if (check_flag(&info, "KINSetPrintLevel", 2, iam)) psb_c_abort(ictxt);
    info = KINSetUserData(kmem, &user_data);
    if (check_flag(&info, "KINSetUserData", 1, iam)) psb_c_abort(ictxt);
    info = KINSetConstraints(kmem, constraints);
@@ -457,10 +457,12 @@
    }
    KINFree(&kmem);
 
-   for(i=2;i<=1+1;i++){  // Main Time Loop
+   for(i=2;i<=Nt;i++){  // Main Time Loop
      if (iam == 0){
        fprintf(stdout, "\n**********************************************************************\n");
-       fprintf(stdout, "************ Time Step %d of %d **************************************\n", i,Nt );
+       fprintf(stdout, " Time Step %d of %d \n", i,Nt );
+       fprintf(stdout, "**********************************************************************\n");
+       fflush(stdout);
      }
      user_data.timestep = i; // used to compute time depending quantities
 
