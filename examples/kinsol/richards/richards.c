@@ -99,6 +99,13 @@
    get_buffer(fp);
    sscanf(buffer,"%lf ",val);
  }
+ void get_dparm2(FILE *fp, double *val, int size)
+ {
+   get_buffer(fp);
+   val = (double *) malloc( sizeof(double)*size );
+   for(int i=0; i<size; i++)
+    sscanf(buffer,"%lf ", &val[i]);
+ }
  void get_hparm(FILE *fp, char *val)
  {
    get_buffer(fp);
@@ -141,7 +148,23 @@
     psb_d_t thetas, thetar, alpha, beta, a, gamma, Ks, Tmax, tol, rho, phi, pr;
     psb_d_t xmax, ymax, L;
     double  fnormtol, scsteptol;
+    char garbage[100];
     char methd[20],ptype[20],afmt[8]; /* Solve method, p. type, matrix format */
+    /* Preconditioner Parameters */
+    char smther[20],restr[20],prol[20],solve[20],variant[20]; //1st smoother
+    psb_i_t jsweeps, novr, fill, invfill;
+    psb_d_t thr;
+    char smther2[20],restr2[20],prol2[20],solve2[20],variant2[20]; //2nd smoother
+    psb_i_t jsweeps2, novr2, fill2, invfill2;;
+    psb_d_t thr2;
+    char par_aggr_alg[20], aggr_prol[20], aggr_type[20], aggr_ord[20]; // AMG aggregation
+    char aggr_filter[20], mlcycle[20];
+    psb_d_t mncrratio, *athresv, athres;
+    psb_i_t thrvsz, csize, bcm_alg, bcm_sweeps, maxlevs;
+    char cmat[20], csolve[20], csbsolve[20], cvariant[20], ckryl[20]; // coarsest-level solver
+    char checkres[20], printres[20];
+    psb_i_t cfill, cinvfill, cjswp, crkiter, crktrace, checkiter, printiter, outer_sweeps;
+    psb_d_t cthres, crkeps, ctol;
     /* Parallel Environment */
     psb_i_t ictxt,iam,np;
     psb_c_descriptor *cdh;
@@ -169,9 +192,11 @@
       fflush(stdout);
     }
 
-    /* Read Problem Settings from file */
+    /* ------------------------------------------------------------------------
+     * Read Problem Settings from file
+     *------------------------------------------------------------------------*/
     if (iam == 0) {
-      get_iparm(stdin,&nparms);
+      //get_hparm(stdin, NULL); // Problem Parameters
       get_iparm(stdin,&idim);
       get_dparm(stdin,&xmax);
       get_dparm(stdin,&ymax);
@@ -187,18 +212,78 @@
       get_dparm(stdin,&phi);
       get_dparm(stdin,&pr);
       get_dparm(stdin,&Tmax);
+      //get_hparm(stdin, NULL); // Newton Parameters
       get_iparm(stdin,&Nt);
       get_iparm(stdin,&newtonmaxit);
       get_dparm(stdin,&fnormtol);
       get_dparm(stdin,&scsteptol);
-      get_hparm(stdin,methd);
-      get_hparm(stdin,ptype);
+      //get_hparm(stdin, NULL); // PSBLAS parameters
       get_hparm(stdin,afmt);
+      get_hparm(stdin,methd);
       get_iparm(stdin,&istop);
       get_iparm(stdin,&itmax);
-      get_iparm(stdin,&itrace);
       get_iparm(stdin,&irst);
+      get_iparm(stdin,&itrace);
       get_dparm(stdin,&tol);
+      get_hparm(stdin,ptype);
+      //get_hparm(stdin, NULL); // First smoother (for all levels but coarsest)
+      get_hparm(stdin,smther);    // Smoother type JACOBI FBGS GS BWGS BJAC AS. For 1-level, repeats previous.
+      get_iparm(stdin,&jsweeps);   // Number of sweeps for smoother
+      get_iparm(stdin,&novr);      // Number of overlap layers for AS preconditioner
+      get_hparm(stdin,restr);     // AS restriction operator: NONE HALO
+      get_hparm(stdin,prol);      // AS prolongation operator: NONE SUM AVG
+      get_hparm(stdin,solve);     // Subdomain solver for BJAC/AS: JACOBI GS BGS ILU ILUT MILU MUMPS SLU UMF
+      get_hparm(stdin,variant);   // AINV variant: LLK, etc
+      get_iparm(stdin,&fill);      // Fill level P for ILU(P) and ILU(T,P)
+      get_iparm(stdin,&invfill);   // Inverse fill-in for INVK
+      get_dparm(stdin,&thr);       // Threshold T for ILU(T,P)
+      //get_hparm(stdin, NULL); // Second smoother, always ignored for non-ML
+      get_hparm(stdin,smther2);    // Smoother type JACOBI FBGS GS BWGS BJAC AS. For 1-level, repeats previous.
+      get_iparm(stdin,&jsweeps2);  // Number of sweeps for smoother
+      get_iparm(stdin,&novr2);     // Number of overlap layers for AS preconditioner
+      get_hparm(stdin,restr2);     // AS restriction operator: NONE HALO
+      get_hparm(stdin,prol2);      // AS prolongation operator: NONE SUM AVG
+      get_hparm(stdin,solve2);     // Subdomain solver for BJAC/AS: JACOBI GS BGS ILU ILUT MILU MUMPS SLU UMF
+      get_hparm(stdin,variant2);   // AINV variant: LLK, etc
+      get_iparm(stdin,&fill2);     // Fill level P for ILU(P) and ILU(T,P)
+      get_iparm(stdin,&invfill2);  // Inverse fill-in for INVK
+      get_dparm(stdin,&thr2);      // Threshold T for ILU(T,P)
+      //get_hparm(stdin, NULL);  //  Multilevel parameters
+      get_hparm(stdin,mlcycle);    // Type of multilevel CYCLE: VCYCLE WCYCLE KCYCLE MULT ADD
+      get_iparm(stdin,&outer_sweeps);// Number of outer sweeps for ML
+      get_iparm(stdin,&maxlevs);     // Max Number of levels in a multilevel preconditioner; if <0, lib default
+      get_iparm(stdin,&csize);       // Target coarse matrix size; if <0, lib default
+      get_hparm(stdin,par_aggr_alg); // Parallel aggregation: DEC, SYMDEC
+      get_hparm(stdin,aggr_prol);    // Aggregation prolongator: SMOOTHED UNSMOOTHED
+      get_hparm(stdin,aggr_type);    // Type of aggregation: SOC1 (Vanek&B&M), SOC2(Gratton), BCM (BootCMatch)
+      get_hparm(stdin,aggr_ord);     // Ordering of aggregation NATURAL DEGREE
+      get_hparm(stdin,aggr_filter);  // Filtering of matrix:  FILTER NOFILTER
+      get_dparm(stdin,&mncrratio);   // Coarsening ratio, if < 0 use library default1
+      get_iparm(stdin,&thrvsz);      // Number of thresholds in vector, next line ignored if <= 0
+      get_dparm2(stdin,athresv,thrvsz); // Thresholds
+      get_dparm(stdin,&athres);      // Smoothed aggregation threshold, ignored if < 0
+      get_iparm(stdin,&bcm_alg);     // BCM method: 0 PREIS, 1 MC64, 2 SPRAL (auction)
+      get_iparm(stdin,&bcm_sweeps);  // BCM Pairing sweeps
+      //get_hparm(stdin, NULL); // Coarse level solver
+      get_hparm(stdin,csolve);     // Coarsest-level solver: MUMPS(global) UMF SLU SLUDIST JACOBI GS BJAC RKR(global)
+      get_hparm(stdin,csbsolve);   // Coarsest-level subsolver for BJAC: ILU ILUT MILU UMF MUMPS(local) SLU RKR(local)
+      get_hparm(stdin,cvariant);   // AINV Variant for the coarse solver
+      get_hparm(stdin,ckryl);      // Krylov method for RKR solver/subsolver, ignored otherwise
+      get_hparm(stdin,cmat);       // Coarsest-level matrix distribution: DIST  REPL
+      get_iparm(stdin,&cfill);     // Coarsest-level fillin P for ILU(P) and ILU(T,P)
+      get_iparm(stdin,&cinvfill);  // Coarsest-level inverse Fill level P for INVK
+      get_dparm(stdin,&cthres);    // Coarsest-level threshold T for ILU(T,P)
+      get_iparm(stdin,&cjswp);     // Number of sweeps for JACOBI/GS/BJAC coarsest-level solver
+      get_iparm(stdin,&crkiter);   // maxit for RKR
+      get_dparm(stdin,&crkeps);    // eps for RKR
+      get_iparm(stdin,&crktrace);  // itrace for RKR
+      get_hparm(stdin,checkres);   // Check the BJAC residual: T F
+      get_hparm(stdin,printres);   // Print the BJAC residual: T F
+      get_iparm(stdin,&checkiter); // ITRACE for residual check
+      get_iparm(stdin,&printiter); // ITRACE for residual print
+      get_dparm(stdin,&ctol);      // Tolerance for exit from BJAC
+      /* Print the Problem infos, information on the preconditioner are printed
+       * by the PSBLAS interface.                                             */
       fprintf(stdout, "\nModel Parameters:\n");
       fprintf(stdout, "Saturated moisture contents        : %1.3f\n",thetar);
       fprintf(stdout, "Residual moisture contents         : %1.3f\n",thetas);
@@ -209,46 +294,108 @@
       fprintf(stdout, "van Genuchten empirical parameters : (%1.3e,%1.3f,%1.3e,%1.3f)\n",
         alpha,beta,a,gamma);
       fprintf(stdout, "Initial value of the pressure head is %lf cm\n",pr);
-      fprintf(stdout, "Solving in a box [0,%lf]x[0,%lf]x[0,%lf]\n",xmax,ymax,L);
+      fprintf(stdout, "Solving in a box [0,%lf]x[0,%lf]x[0,%lf] with %dx%dx%d dofs\n",xmax,ymax,L,idim,idim,idim);
       fflush(stdout);
    }
-   psb_c_ibcast(ictxt,1,&nparms,0);
-   psb_c_ibcast(ictxt,1,&idim,0);
-   psb_c_dbcast(ictxt,1,&xmax,0);
-   psb_c_dbcast(ictxt,1,&ymax,0);
-   psb_c_dbcast(ictxt,1,&L,0);
-   psb_c_dbcast(ictxt,1,&thetas,0);
-   psb_c_dbcast(ictxt,1,&thetar,0);
-   psb_c_dbcast(ictxt,1,&alpha,0);
-   psb_c_dbcast(ictxt,1,&beta,0);
-   psb_c_dbcast(ictxt,1,&a,0);
-   psb_c_dbcast(ictxt,1,&gamma,0);
-   psb_c_dbcast(ictxt,1,&Ks,0);
-   psb_c_dbcast(ictxt,1,&rho,0);
-   psb_c_dbcast(ictxt,1,&phi,0);
-   psb_c_dbcast(ictxt,1,&pr,0);
-   psb_c_dbcast(ictxt,1,&Tmax,0);
-   psb_c_ibcast(ictxt,1,&Nt,0);
-   psb_c_ibcast(ictxt,1,&newtonmaxit,0);
-   psb_c_dbcast(ictxt,1,&fnormtol,0);
-   psb_c_dbcast(ictxt,1,&scsteptol,0);
-   psb_c_hbcast(ictxt,methd,0);
-   psb_c_hbcast(ictxt,ptype,0);
-   psb_c_hbcast(ictxt,afmt,0);
-   psb_c_ibcast(ictxt,1,&istop,0);
-   psb_c_ibcast(ictxt,1,&itmax,0);
-   psb_c_ibcast(ictxt,1,&itrace,0);
-   psb_c_ibcast(ictxt,1,&irst,0);
-   psb_c_dbcast(ictxt,1,&tol,0);
+    psb_c_ibcast(ictxt,1,&idim,0);
+    psb_c_dbcast(ictxt,1,&xmax,0);
+    psb_c_dbcast(ictxt,1,&ymax,0);
+    psb_c_dbcast(ictxt,1,&L,0);
+    psb_c_dbcast(ictxt,1,&thetas,0);
+    psb_c_dbcast(ictxt,1,&thetar,0);
+    psb_c_dbcast(ictxt,1,&alpha,0);
+    psb_c_dbcast(ictxt,1,&beta,0);
+    psb_c_dbcast(ictxt,1,&a,0);
+    psb_c_dbcast(ictxt,1,&gamma,0);
+    psb_c_dbcast(ictxt,1,&Ks,0);
+    psb_c_dbcast(ictxt,1,&rho,0);
+    psb_c_dbcast(ictxt,1,&phi,0);
+    psb_c_dbcast(ictxt,1,&pr,0);
+    psb_c_dbcast(ictxt,1,&Tmax,0);
+    // Newton Parameters
+    psb_c_ibcast(ictxt,1,&Nt,0);
+    psb_c_ibcast(ictxt,1,&newtonmaxit,0);
+    psb_c_dbcast(ictxt,1,&fnormtol,0);
+    psb_c_dbcast(ictxt,1,&scsteptol,0);
+    // PSBLAS parameters
+    psb_c_hbcast(ictxt,afmt,0);
+    psb_c_hbcast(ictxt,methd,0);
+    psb_c_ibcast(ictxt,1,&istop,0);
+    psb_c_ibcast(ictxt,1,&itmax,0);
+    psb_c_ibcast(ictxt,1,&irst,0);
+    psb_c_ibcast(ictxt,1,&itrace,0);
+    psb_c_dbcast(ictxt,1,&tol,0);
+    psb_c_hbcast(ictxt,ptype,0);
+    // First smoother (for all levels but coarsest)
+    psb_c_hbcast(ictxt,smther,0);    // Smoother type JACOBI FBGS GS BWGS BJAC AS. For 1-level, repeats previous.
+    psb_c_ibcast(ictxt,1,&jsweeps,0);// Number of sweeps for smoother
+    psb_c_ibcast(ictxt,1,&novr,0);   // Number of overlap layers for AS preconditioner
+    psb_c_hbcast(ictxt,restr,0);     // AS restriction operator: NONE HALO
+    psb_c_hbcast(ictxt,prol,0);      // AS prolongation operator: NONE SUM AVG
+    psb_c_hbcast(ictxt,solve,0);     // Subdomain solver for BJAC/AS: JACOBI GS BGS ILU ILUT MILU MUMPS SLU UMF
+    psb_c_hbcast(ictxt,variant,0);   // AINV variant: LLK, etc
+    psb_c_ibcast(ictxt,1,&fill,0);   // Fill level P for ILU(P) and ILU(T,P)
+    psb_c_ibcast(ictxt,1,&invfill,0);// Inverse fill-in for INVK
+    psb_c_dbcast(ictxt,1,&thr,0);    // Threshold T for ILU(T,P)
+    // Second smoother, always ignored for non-ML
+    psb_c_hbcast(ictxt,smther2,0);   // Smoother type JACOBI FBGS GS BWGS BJAC AS. For 1-level, repeats previous.
+    psb_c_ibcast(ictxt,1,&jsweeps2,0); // Number of sweeps for smoother
+    psb_c_ibcast(ictxt,1,&novr2,0);  // Number of overlap layers for AS preconditioner
+    psb_c_hbcast(ictxt,restr2,0);    // AS restriction operator: NONE HALO
+    psb_c_hbcast(ictxt,prol2,0);     // AS prolongation operator: NONE SUM AVG
+    psb_c_hbcast(ictxt,solve2,0);    // Subdomain solver for BJAC/AS: JACOBI GS BGS ILU ILUT MILU MUMPS SLU UMF
+    psb_c_hbcast(ictxt,variant2,0);  // AINV variant: LLK, etc
+    psb_c_ibcast(ictxt,1,&fill2,0);  // Fill level P for ILU(P) and ILU(T,P)
+    psb_c_ibcast(ictxt,1,&invfill2,0);// Inverse fill-in for INVK
+    psb_c_dbcast(ictxt,1,&thr2,0);   // Threshold T for ILU(T,P)
+    //  Multilevel parameters
+    psb_c_hbcast(ictxt,mlcycle,0);   // Type of multilevel CYCLE: VCYCLE WCYCLE KCYCLE MULT ADD
+    psb_c_ibcast(ictxt,1,&outer_sweeps,0);// Number of outer sweeps for ML
+    psb_c_ibcast(ictxt,1,&maxlevs,0);// Max Number of levels in a multilevel preconditioner; if <0, lib default
+    psb_c_ibcast(ictxt,1,&csize,0);  // Target coarse matrix size; if <0, lib default
+    psb_c_hbcast(ictxt,par_aggr_alg,0); // Parallel aggregation: DEC, SYMDEC
+    psb_c_hbcast(ictxt,aggr_prol,0); // Aggregation prolongator: SMOOTHED UNSMOOTHED
+    psb_c_hbcast(ictxt,aggr_type,0); // Type of aggregation: SOC1 (Vanek&B&M), SOC2(Gratton), BCM (BootCMatch)
+    psb_c_hbcast(ictxt,aggr_ord,0);  // Ordering of aggregation NATURAL DEGREE
+    psb_c_hbcast(ictxt,aggr_filter,0);// Filtering of matrix:  FILTER NOFILTER
+    psb_c_dbcast(ictxt,1,&mncrratio,0);// Coarsening ratio, if < 0 use library default1
+    psb_c_ibcast(ictxt,1,&thrvsz,0); // Number of thresholds in vector, next line ignored if <= 0
+    //psb_c_dbcast(ictxt,thrvsz,athresv,0); // Thresholds
+    psb_c_dbcast(ictxt,1,&athres,0); // Smoothed aggregation threshold, ignored if < 0
+    psb_c_ibcast(ictxt,1,&bcm_alg,0);// BCM method: 0 PREIS, 1 MC64, 2 SPRAL (auction)
+    psb_c_ibcast(ictxt,1,&bcm_sweeps,0); // BCM Pairing sweeps
+    // Coarse level solver
+    psb_c_hbcast(ictxt,csolve,0);     // Coarsest-level solver: MUMPS(global) UMF SLU SLUDIST JACOBI GS BJAC RKR(global)
+    psb_c_hbcast(ictxt,csbsolve,0);   // Coarsest-level subsolver for BJAC: ILU ILUT MILU UMF MUMPS(local) SLU RKR(local)
+    psb_c_hbcast(ictxt,cvariant,0);   // AINV Variant for the coarse solver
+    psb_c_hbcast(ictxt,ckryl,0);      // Krylov method for RKR solver/subsolver, ignored otherwise
+    psb_c_hbcast(ictxt,cmat,0);       // Coarsest-level matrix distribution: DIST  REPL
+    psb_c_ibcast(ictxt,1,&cfill,0);   // Coarsest-level fillin P for ILU(P) and ILU(T,P)
+    psb_c_ibcast(ictxt,1,&cinvfill,0);// Coarsest-level inverse Fill level P for INVK
+    psb_c_dbcast(ictxt,1,&cthres,0);  // Coarsest-level threshold T for ILU(T,P)
+    psb_c_ibcast(ictxt,1,&cjswp,0);   // Number of sweeps for JACOBI/GS/BJAC coarsest-level solver
+    psb_c_ibcast(ictxt,1,&crkiter,0); // maxit for RKR
+    psb_c_dbcast(ictxt,1,&crkeps,0);  // eps for RKR
+    psb_c_ibcast(ictxt,1,&crktrace,0);// itrace for RKR
+    psb_c_hbcast(ictxt,checkres,0);   // Check the BJAC residual: T F
+    psb_c_hbcast(ictxt,printres,0);   // Print the BJAC residual: T F
+    psb_c_ibcast(ictxt,1,&checkiter,0); // ITRACE for residual check
+    psb_c_ibcast(ictxt,1,&printiter,0); // ITRACE for residual print
+    psb_c_dbcast(ictxt,1,&ctol,0);      // Tolerance for exit from BJAC
 
+    /* ------------------------------------------------------------------------
+     * Domain size compatibility check
+     * The present version of the codes assumes a cube, this will be generalized
+     *------------------------------------------------------------------------*/
    if( (xmax != ymax) || (xmax != L) || (ymax != L)){
      fprintf(stderr, "\nAbort, works only on cube for now!\n");
      fflush(stderr);
      psb_c_abort(ictxt);
    }
 
-
-    /* Perform a 3D BLOCK data distribution */
+    /*-------------------------------------------------------------------------
+     * Perform a 3D BLOCK data distribution
+     *------------------------------------------------------------------------*/
     if(iam==0){
       fprintf(stdout, "\nStarting 3D BLOCK data distribution\n");
       fflush(stdout);
@@ -366,13 +513,18 @@
     options.irst   = irst;
     options.itrace = 1;
     options.istop  = istop;
-    /* Create PSBLAS/MLD2P4 linear solver */
+    /*-------------------------------------------------------------------------
+     * Create PSBLAS/AMG4PSBLAS linear solver
+     *-------------------------------------------------------------------------*/
     LS = SUNLinSol_PSBLAS(options, methd, ptype, ictxt);
     if(check_flag((void *)LS, "SUNLinSol_PSBLAS", 0, iam)) psb_c_abort(ictxt);
 
     SUNLinSolInitialize_PSBLAS(LS);
 
     if(iam == 0) fprintf(stdout, "Setting ML options.\n");
+    /*-------------------------------------------------------------------------
+     * Set AMG4PSBLAS options: anything is preconditionable!
+     *-------------------------------------------------------------------------*/
     info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
     if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
     info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
@@ -461,7 +613,7 @@
    }
    KINFree(&kmem);
 
-   for(i=2;i==Nt;i++){  // Main Time Loop
+   for(i=2;i<=Nt;i++){  // Main Time Loop
      if (iam == 0){
        fprintf(stdout, "\n**********************************************************************\n");
        fprintf(stdout, " Time Step %d of %d \n", i,Nt );
