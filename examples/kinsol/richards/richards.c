@@ -525,6 +525,149 @@
     /*-------------------------------------------------------------------------
      * Set AMG4PSBLAS options: anything is preconditionable!
      *-------------------------------------------------------------------------*/
+    if( strcmp(ptype,"NONE") || strcmp(ptype,"NOPREC") ){
+        // Do nothing, keep defaults
+    }else if( strcmp(ptype,"L1-JACOBI") || strcmp(ptype,"JACOBI") || strcmp(ptype,"GS") || strcmp(ptype,"FWGS") || strcmp(ptype,"FBGS")  ){
+      info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",jsweeps);
+      if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
+    }else if( strcmp(ptype,"BJAC") || strcmp(ptype,"L1-BJAC") ){
+      info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",jsweeps);
+      if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
+      if (strcmp(solve,"INVK")){
+        // TO BE FIXED ON INTERFACE MADE
+      }else if (strcmp(solve,"INVT")){
+        // TO BE FIXED ON INTERFACE MADE
+      }else if (strcmp(solve,"AINV")){
+        // TO BE FIXED ON INTERFACE MADE
+        info = SUNLinSolSetc_PSBLAS(LS,"AINV_ALG",variant);
+      }else{
+        info = SUNLinSolSetc_PSBLAS(LS,"SUB_SOLVE",solve);
+        if (check_flag(&info, "SUB_SOLVE", 1, iam)) psb_c_abort(ictxt);
+      }
+      info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",fill);
+      if (check_flag(&info, "SUB_FILLIN", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSeti_PSBLAS(LS,"INV_FILLIN",invfill);
+      if (check_flag(&info, "INV_FILLIN", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSetr_PSBLAS(LS,"SUB_ILUTHRS",thr);
+      if (check_flag(&info, "SUB_ILUTHRS", 1, iam)) psb_c_abort(ictxt);
+    }else if( strcmp(ptype,"AS")){
+      info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",jsweeps);
+      if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSeti_PSBLAS(LS,"SUB_OVR",novr);
+      if (check_flag(&info, "SUB_OVR", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSetc_PSBLAS(LS,"SUB_RESTR",restr);
+      if (check_flag(&info, "SUB_RESTR", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSetc_PSBLAS(LS,"SUB_PROL",prol);
+      if (strcmp(solve,"INVK")){
+        // TO BE FIXED ON INTERFACE MADE
+      }else if (strcmp(solve,"INVT")){
+        // TO BE FIXED ON INTERFACE MADE
+      }else if (strcmp(solve,"AINV")){
+        // TO BE FIXED ON INTERFACE MADE
+        info = SUNLinSolSetc_PSBLAS(LS,"AINV_ALG",variant);
+      }else{
+        info = SUNLinSolSetc_PSBLAS(LS,"SUB_SOLVE",solve);
+        if (check_flag(&info, "SUB_SOLVE", 1, iam)) psb_c_abort(ictxt);
+      }
+      info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",fill);
+      if (check_flag(&info, "SUB_FILLIN", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSeti_PSBLAS(LS,"INV_FILLIN",invfill);
+      if (check_flag(&info, "INV_FILLIN", 1, iam)) psb_c_abort(ictxt);
+      info = SUNLinSolSetr_PSBLAS(LS,"SUB_ILUTHRS",thr);
+      if (check_flag(&info, "SUB_ILUTHRS", 1, iam)) psb_c_abort(ictxt);
+    }else if( strcmp(ptype,"ML")){
+      // Multilevel Preconditioner
+      info = SUNLinSolSetc_PSBLAS(LS,"ML_CYCLE",mlcycle);
+      info = SUNLinSolSeti_PSBLAS(LS,"OUTER_SWEEPS",outer_sweeps);
+      info = SUNLinSolSetc_PSBLAS(LS,"PAR_AGGR_ALG",par_aggr_alg);
+      info = SUNLinSolSetc_PSBLAS(LS,"AGGR_PROL",aggr_prol);
+      // Options for BCM
+      if (strcmp(aggr_type,"BCM")){
+        // call prec%set(bcmag,info)
+        info = SUNLinSolSeti_PSBLAS(LS,"BCM_MATCH_ALG",bcm_alg);
+        info = SUNLinSolSeti_PSBLAS(LS,"BCM_SWEEPS",bcm_sweeps);
+      }else if(strcmp(aggr_type,"PARMATCH")){
+        // call prec%set(parmchag,info)
+         info = SUNLinSolSeti_PSBLAS(LS,"PRMC_SWEEPS",bcm_sweeps);
+         info = SUNLinSolSeti_PSBLAS(LS,"PRMC_NEED_SYMMETRIZE",1);
+      }else{
+        info = SUNLinSolSetc_PSBLAS(LS,"AGGR_TYPE",aggr_type);
+      }
+      info = SUNLinSolSetc_PSBLAS(LS,"AGGR_ORD",aggr_ord);
+      info = SUNLinSolSetc_PSBLAS(LS,"AGGR_FILTER",aggr_filter);
+      if(csize > 0){
+        info = SUNLinSolSeti_PSBLAS(LS,"MIN_COARSE_SIZE",csize);
+      }
+      if(mncrratio > 1){
+        info = SUNLinSolSeti_PSBLAS(LS,"MIN_CR_RATIO",mncrratio);
+      }
+      if(maxlevs > 0){
+        info = SUNLinSolSeti_PSBLAS(LS,"MAX_LEVS",maxlevs);
+      }
+      if(athres > 0.0){
+        info = SUNLinSolSetr_PSBLAS(LS,"AGGR_THRESH",athres);
+      }
+      // Missing command on threshold vector: need to fix input
+      info = SUNLinSolSetc_PSBLAS(LS,"SMOOTHER_TYPE",smther);
+      info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",jsweeps);
+      // FIRST SMOOTHER
+      if (strcmp(smther,"GS") || strcmp(smther,"BWGS") || strcmp(smther,"FBGS") || strcmp(smther,"JACOBI") || strcmp(smther,"L1-JACOBI") || strcmp(smther,"L1-FBGS") ){
+        // do nothing
+      }else{
+        info = SUNLinSolSeti_PSBLAS(LS,"SUB_OVR",novr);
+        info = SUNLinSolSetc_PSBLAS(LS,"SUB_RESTR",restr);
+        info = SUNLinSolSetc_PSBLAS(LS,"SUB_PROL",prol);
+        if (strcmp(solve,"INVK")){
+          // TO BE FIXED ON INTERFACE MADE
+        }else if (strcmp(solve,"INVT")){
+          // TO BE FIXED ON INTERFACE MADE
+        }else if (strcmp(solve,"AINV")){
+          // TO BE FIXED ON INTERFACE MADE
+          info = SUNLinSolSetc_PSBLAS(LS,"AINV_ALG",variant);
+        }else{
+          info = SUNLinSolSetc_PSBLAS(LS,"SUB_SOLVE",solve);
+          if (check_flag(&info, "SUB_SOLVE", 1, iam)) psb_c_abort(ictxt);
+        }
+        info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",fill);
+        if (check_flag(&info, "SUB_FILLIN", 1, iam)) psb_c_abort(ictxt);
+        info = SUNLinSolSeti_PSBLAS(LS,"INV_FILLIN",invfill);
+        if (check_flag(&info, "INV_FILLIN", 1, iam)) psb_c_abort(ictxt);
+        info = SUNLinSolSetr_PSBLAS(LS,"SUB_ILUTHRS",thr);
+        if (check_flag(&info, "SUB_ILUTHRS", 1, iam)) psb_c_abort(ictxt);
+      }
+      // SECOND SMOOTHER
+      if ( !strcmp(smther2,"NONE")){
+        if (strcmp(smther2,"GS") || strcmp(smther2,"BWGS") || strcmp(smther2,"FBGS") || strcmp(smther2,"JACOBI") || strcmp(smther2,"L1-JACOBI") || strcmp(smther2,"L1-FBGS") ){
+          // do nothing
+        }else{
+          info = SUNLinSolSeti_PSBLAS(LS,"SUB_OVR",novr2);
+          info = SUNLinSolSetc_PSBLAS(LS,"SUB_RESTR",restr2);
+          info = SUNLinSolSetc_PSBLAS(LS,"SUB_PROL",prol2);
+          if (strcmp(solve2,"INVK")){
+            // TO BE FIXED ON INTERFACE MADE
+          }else if (strcmp(solve2,"INVT")){
+            // TO BE FIXED ON INTERFACE MADE
+          }else if (strcmp(solve2,"AINV")){
+            // TO BE FIXED ON INTERFACE MADE
+            info = SUNLinSolSetc_PSBLAS(LS,"AINV_ALG",variant2);
+          }else{
+            info = SUNLinSolSetc_PSBLAS(LS,"SUB_SOLVE",solve2);
+            if (check_flag(&info, "SUB_SOLVE", 1, iam)) psb_c_abort(ictxt);
+          }
+          info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",fill2);
+          if (check_flag(&info, "SUB_FILLIN", 1, iam)) psb_c_abort(ictxt);
+          info = SUNLinSolSeti_PSBLAS(LS,"INV_FILLIN",invfill2);
+          if (check_flag(&info, "INV_FILLIN", 1, iam)) psb_c_abort(ictxt);
+          info = SUNLinSolSetr_PSBLAS(LS,"SUB_ILUTHRS",thr2);
+          if (check_flag(&info, "SUB_ILUTHRS", 1, iam)) psb_c_abort(ictxt);
+        }
+      }
+      // COARSE SOLVE
+    }else{
+      if(iam == 0); fprintf(stderr, "Warning %s is an unknown preconditioner!\n",ptype);
+    }
+
+
     info = SUNLinSolSeti_PSBLAS(LS,"SMOOTHER_SWEEPS",2);
     if (check_flag(&info, "SMOOTHER_SWEEPS", 1, iam)) psb_c_abort(ictxt);
     info = SUNLinSolSeti_PSBLAS(LS,"SUB_FILLIN",1);
